@@ -7,6 +7,8 @@
 
 **它不是又一个爬虫。** 它是一套加固工具 + 安全方法论：你已经装好的 MediaCrawler，跑一条命令，就从"机器人裸奔"变成"尽量像真人"。所有改动**自动备份、幂等、可一键还原**，绝不损坏你的文件。
 
+**两大能力**：① 给爬虫做**五层抓取加固**（下方）；② 一套**拟人互动引擎**做安全的点赞/关注/收藏/评论（见下文「互动引擎」）。
+
 ```bash
 python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run   # 先看会改什么
 python scripts/apply_hardening.py /path/to/MediaCrawler             # 真打（自动备份）
@@ -62,6 +64,26 @@ python scripts/apply_hardening.py ~/path/to/MediaCrawler --revert
 | `scripts/verify_stealth.py` | 指纹自检：开浏览器对比"注入前/后"，确认 webdriver 等特征被隐藏 |
 | `scripts/human_behavior.py` | 人类行为模拟模块（抖动睡眠 / 预热 / 鼠标滚动），可手动集成复用 |
 | `scripts/weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游有无反检测补丁 |
+| `scripts/human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（dry-run 默认） |
+| `scripts/interaction_policy.py` | 互动配额：保守每日上限 + 最小间隔 + 跨 session 计数持久化 |
+| `scripts/mirage_loop.py` | ⭐终极"拟人刷号"主循环：大量浏览 + 少量克制互动 + 风控熔断 |
+
+## 🤝 互动引擎（点赞 / 关注 / 收藏 / 评论）
+
+除了抓取加固，Mirage 还提供一套**拟人互动引擎**——像真人一样安全地点赞/关注/收藏/评论。**0 封控靠的是克制 + 拟人，不是狂刷**：
+
+- **dry-run 默认开**：默认只把鼠标移动到位、演示不真点，确认无误才 `dry_run=False`。
+- **保守每日上限 + 最小间隔 + 跨 session 计数**：杜绝秒赞、超量、重启绕过。
+- **贝塞尔点击 + 先看够才赞 + 二段决策**：看了也只约 45% 才互动，把配额留给优质内容。
+- **终极"拟人刷号"循环**：大量浏览 + 少量克制互动 + 遇风控（验证码/限流）自动熔断。
+
+```python
+from mirage_loop import MirageLoop
+loop = MirageLoop(page, dry_run=True, conservative=True)   # 新号建议 conservative
+await loop.run()
+```
+
+⚠️ 互动有**真实对外后果**（真给人点赞/评论），**只用小号**。完整安全手册见 [docs/interaction-safety.md](docs/interaction-safety.md)。
 
 ## 🛡️ 安全使用（务必先读）
 

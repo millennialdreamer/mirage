@@ -1,9 +1,9 @@
 ---
 name: mirage
 description: |
-  给小红书（XHS）爬虫 MediaCrawler 一键打入"五层反检测加固"，让自动化抓取尽量不被风控识别、不被警告限流封号。
-  适用场景：加固现有 MediaCrawler 安装、体检加固状态、切换安全/常规/激进档位、验证 stealth 指纹是否生效、安全试跑指引、被风控警告后排查。
-  关键词：小红书爬虫、反检测、防风控、被警告、被限流、被封号、stealth、anti-detection、MediaCrawler 加固、爬虫太快、降低被检测概率。
+  给小红书（XHS）自动化做反检测，两大能力：① 给爬虫 MediaCrawler 一键打入"五层反检测加固"（抓取场景）；② 提供"拟人互动引擎"做安全的点赞/关注/收藏/评论（互动场景）。让自动化尽量不被风控识别、不被警告限流封号。
+  适用场景：加固 MediaCrawler、体检/切档/验证 stealth、被警告排查；以及 安全互动(点赞/关注/收藏/评论)、拟人刷号、养号、互动防封控、有效点击。
+  关键词：小红书爬虫、反检测、防风控、被警告、被限流、被封号、stealth、MediaCrawler 加固、安全点赞、自动关注、拟人互动、养号、刷号、互动不被封、点击质量、有效点击。
 metadata:
   trigger: 小红书爬虫防检测 / 加固 / 被警告
   source: arggjarvs/mirage
@@ -20,8 +20,11 @@ metadata:
 | `apply_hardening.py` | ⭐一键给 MediaCrawler 打入五层加固（幂等 / 自动备份 / 可回滚） |
 | `safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换 |
 | `verify_stealth.py` | 指纹自检：确认 stealth 真的隐藏了 webdriver 等特征 |
-| `human_behavior.py` | 人类行为模拟模块（供手动集成 / 文档示例） |
+| `human_behavior.py` | 人类行为模拟（贝塞尔鼠标 / 拟人节奏，被互动引擎复用） |
 | `weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游补丁 |
+| `human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（**dry-run 默认**） |
+| `interaction_policy.py` | 互动配额：保守每日上限 + 最小间隔 + 跨 session 计数持久化 |
+| `mirage_loop.py` | ⭐终极版"拟人刷号"主循环：大量浏览 + 少量克制互动 + 风控熔断 |
 
 ## 五层防护（这是"不会被检测"的全部底气）
 
@@ -115,6 +118,29 @@ python scripts/verify_stealth.py --stealth <MediaCrawler根目录>/libs/stealth.
 - 用户"太慢了" → 解释 safe 档最稳，确认愿意担风险再 `safe_profile.py normal`。
 - 用户"被警告了！" → 立刻让其停手 → `--check` + 切 safe + 确认是小号。
 - 用户"想验证 stealth 生效没" → 给出 `verify_stealth.py` 命令让用户**自己**跑，不替跑。
+
+## 互动引擎（点赞 / 关注 / 收藏 / 评论）—— 抓取之外的第二大能力
+
+当用户要"安全点赞 / 自动关注 / 养号 / 拟人刷号 / 互动不被封 / 有效点击"时，用互动引擎（`human_interaction.py` + `interaction_policy.py` + `mirage_loop.py`）。
+
+**定位**：拟人克制的互动辅助，**不是狂刷机**。安全上限比真人手动还保守。
+
+**铁律（最重要）**：
+- **dry-run 默认开**：默认只把鼠标移动到位、演示不真点。真互动必须显式 `dry_run=False`。每次真跑前主动确认"用的是小号吗？"。
+- **AI 绝不替用户实跑** —— 互动有真实对外后果（真给人点赞/评论）。引导用户自己发起、自己实机验证。
+- 风险排序：**评论最危险**（内容风控）> 关注 > 收藏/点赞。
+
+**终极 loop 用法**：
+```python
+from mirage_loop import MirageLoop
+loop = MirageLoop(page, dry_run=True, interact_prob=0.15, conservative=True)  # 新号建议 conservative
+await loop.run()   # 模拟真人刷小红书：大量浏览 + 少量克制互动，遇风控自动熔断
+```
+- `dry_run=True`(默认)先演示；确认无误再 `dry_run=False` 真跑。
+- `conservative=True` 新号/养号期上限砍 1/3。
+- `interact_prob`(0.1~0.2) 越低越克制。
+
+**安全与速度怎么平衡**：不靠提高频率，靠"点击质量 + 决策逻辑" —— 贝塞尔点击、先看够再决定、看了也只约 45% 才互动、随机顺序、心情波动、风控熔断。详见 [docs/interaction-safety.md](docs/interaction-safety.md)。
 
 ## 合规与边界
 

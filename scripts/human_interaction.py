@@ -1,0 +1,155 @@
+# -*- coding: utf-8 -*-
+"""
+human_interaction.py — Mirage 互动引擎：在小红书页面上"像真人一样"识别并点击
+（点赞 / 关注 / 收藏 / 评论）。
+
+⚠️ 三条安全铁律（写进代码，不靠自觉）：
+  1. **dry_run 默认 True** —— 默认只把鼠标贝塞尔移动到位、打印将做什么，但**不真点**。
+     只有显式 `XhsInteractor(page, dry_run=False)` 才会真正互动。
+  2. 每个动作先问 `policy.can(action)` —— 超每日上限/未过冷却就跳过。
+  3. 互动有**真实对外后果**（真给陌生人点赞/关注/评论），**只用小号**，AI 绝不自己实跑。
+
+设计：识别层(多重 fallback 选择器) → 就绪检查 → 贝塞尔移动+hover+真实 click → 验证生效。
+鼠标轨迹复用 human_behavior 的贝塞尔（绝不瞬移）。
+"""
+
+import asyncio
+import random
+
+try:                                              # scripts/ 下直接跑
+    from human_behavior import human_mouse_move, human_sleep
+except ImportError:                               # 部署到 MediaCrawler/tools/ 后
+    from tools.human_behavior import human_mouse_move, human_sleep
+
+
+# 小红书页面元素的多重 fallback 选择器（语义优先；class 会随改版变，按实际页面可调）。
+# 顺序 = 尝试顺序：稳定语义属性 → role/文本 → class 兜底。
+SELECTORS = {
+    "note_card":   ["section.note-item", "a[href*='/explore/']", "[data-type='note']"],
+    "like":        ["[aria-label*='赞']", "[aria-label*='like']",
+                    "span.like-wrapper", ".interact-container .like-active, .interact-container .like"],
+    "collect":     ["[aria-label*='收藏']", "span.collect-wrapper", ".collect"],
+    "follow":      ["button:has-text('关注'):not(:has-text('已关注'))",
+                    "[aria-label='关注']", ".follow-button:not(.followed)"],
+    "comment_box": ["[contenteditable='true']", "textarea[placeholder*='评论']",
+                    "div.comment-input"],
+    "comment_send":["button:has-text('发送')", "button:has-text('发布')", ".submit"],
+}
+
+
+class XhsInteractor:
+    """小红书拟人互动器。持有一个 Playwright page。"""
+
+    def __init__(self, page, policy=None, dry_run=True):
+        self.page = page
+        self.policy = policy
+        self.dry_run = dry_run          # 默认只演示不真点
+        self._mouse = (None, None)      # 维护上次鼠标位置，贝塞尔链式更连贯
+
+    # ---- 识别层：多重 fallback ----
+    async def _resolve(self, key):
+        """按 SELECTORS[key] 顺序找第一个可见元素，找不到返回 None。"""
+        for sel in SELECTORS.get(key, []):
+            try:
+                loc = self.page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    return loc
+            except Exception:
+                continue
+        return None
+
+    # ---- 就绪检查：滚动到视口 + 可见 + 未被遮挡 ----
+    async def _ready(self, loc):
+        try:
+            await loc.scroll_into_view_if_needed(timeout=3000)
+            await loc.wait_for(state="visible", timeout=3000)
+            await loc.click(trial=True, timeout=1500)   # 无副作用试点；被遮挡会抛
+            return True
+        except Exception:
+            return False
+
+    # ---- 点击层：贝塞尔移动 → hover 犹豫 →（dry-run? 停手 : 真点）----
+    async def _human_click(self, loc, label=""):
+        box = await loc.bounding_box()
+        if not box:
+            return False
+        tx = box["x"] + box["width"] / 2 + random.uniform(-3, 3)
+        ty = box["y"] + box["height"] / 2 + random.uniform(-3, 3)
+        # 贝塞尔曲线移动到目标（非瞬移），维护上次位置做链式
+        self._mouse = await human_mouse_move(self.page, tx, ty, start=self._mouse)
+        await asyncio.sleep(random.uniform(0.15, 0.5))   # 点前 hover 犹豫，像真人
+        if self.dry_run:
+            print(f"  [dry-run] 将点「{label}」@({tx:.0f},{ty:.0f})——已移动到位，不真点")
+            return False
+        # 真实合成点击（mousedown→停顿→mouseup）
+        await self.page.mouse.down()
+        await asyncio.sleep(random.uniform(0.05, 0.09))
+        await self.page.mouse.up()
+        return True
+
+    async def _attr(self, loc, name):
+        try:
+            return await loc.get_attribute(name)
+        except Exception:
+            return None
+
+    # ---- 动作层：每个都先过配额、再就绪、再拟人点、再验证 ----
+    async def _do(self, key, label, verify_attr="aria-pressed"):
+        if self.policy and not self.policy.can(key):
+            print(f"  「{label}」已达上限或在冷却，跳过")
+            return False
+        loc = await self._resolve(key)
+        if not loc:
+            print(f"  没找到「{label}」按钮（选择器需按实际页面调，见 SELECTORS）")
+            return False
+        if not await self._ready(loc):
+            print(f"  「{label}」不可点（被遮挡/不可见）")
+            return False
+        before = await self._attr(loc, verify_attr)
+        clicked = await self._human_click(loc, label)
+        if not clicked:                              # dry-run 或没点成
+            return False
+        await human_sleep(0.6, 0.5, 1.2)             # 点后自然短停
+        after = await self._attr(loc, verify_attr)
+        ok = (after != before) if before is not None else True
+        if ok and self.policy:
+            self.policy.record(key)                  # 只在确认生效后才计数
+        print(f"  ✓ 「{label}」{'已生效' if ok else '(状态未确认)'}")
+        return ok
+
+    async def like_note(self):
+        return await self._do("like", "点赞")
+
+    async def collect_note(self):
+        return await self._do("collect", "收藏")
+
+    async def follow_user(self):
+        return await self._do("follow", "关注", verify_attr="class")
+
+    async def comment_note(self, text: str):
+        """评论 —— 最敏感（内容风控：重复/广告词/带链接最易判违规）。逐字输入更像人。"""
+        if self.policy and not self.policy.can("comment"):
+            print("  「评论」已达上限或在冷却，跳过")
+            return False
+        box = await self._resolve("comment_box")
+        if not box:
+            print("  没找到评论框")
+            return False
+        if not await self._ready(box):
+            return False
+        await self._human_click(box, "评论框")
+        if self.dry_run:
+            print(f"  [dry-run] 将逐字输入评论：{text!r}（不真发）")
+            return False
+        await box.click()
+        for ch in text:                              # 逐字 + 随机延迟，像真人打字
+            await self.page.keyboard.type(ch)
+            await asyncio.sleep(random.uniform(0.06, 0.22))
+        await human_sleep(1.0, 0.6, 1.5)             # 发前停顿（像在检查）
+        send = await self._resolve("comment_send")
+        if send and await self._human_click(send, "发送评论"):
+            if self.policy:
+                self.policy.record("comment")
+            print("  ✓ 评论已发")
+            return True
+        return False
