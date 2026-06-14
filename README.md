@@ -1,4 +1,6 @@
-# xhs-stealth-crawler · 小红书爬虫反检测加固
+# Mirage 幻影 · 小红书爬虫反检测加固
+
+<sub>**Mirage** —— 让风控看见的，只是一个像真人的幻象。</sub>
 
 > 给 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 一键打入**五层反检测加固**，
 > 让小红书（XHS）自动化抓取尽量**不被风控识别** —— 不被警告、不被限流、不被封号。
@@ -35,8 +37,8 @@ python scripts/apply_hardening.py /path/to/MediaCrawler --check     # 体检五�
 前提：你已经装好并能跑通 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)。
 
 ```bash
-git clone https://github.com/arggjarvs/xhs-stealth-crawler.git
-cd xhs-stealth-crawler
+git clone https://github.com/arggjarvs/mirage.git
+cd mirage
 
 # 1. 先 dry-run，看清楚将要改哪些文件（不落盘）
 python scripts/apply_hardening.py ~/path/to/MediaCrawler --dry-run

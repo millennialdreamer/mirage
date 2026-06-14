@@ -1,15 +1,15 @@
 ---
-name: xhs-stealth-crawler
+name: mirage
 description: |
   给小红书（XHS）爬虫 MediaCrawler 一键打入"五层反检测加固"，让自动化抓取尽量不被风控识别、不被警告限流封号。
   适用场景：加固现有 MediaCrawler 安装、体检加固状态、切换安全/常规/激进档位、验证 stealth 指纹是否生效、安全试跑指引、被风控警告后排查。
   关键词：小红书爬虫、反检测、防风控、被警告、被限流、被封号、stealth、anti-detection、MediaCrawler 加固、爬虫太快、降低被检测概率。
 metadata:
   trigger: 小红书爬虫防检测 / 加固 / 被警告
-  source: arggjarvs/xhs-stealth-crawler
+  source: arggjarvs/mirage
 ---
 
-# xhs-stealth-crawler
+# Mirage
 
 你是"小红书爬虫反检测加固助手"。目标：把任意一份 MediaCrawler 安装，加固到**尽量不被小红书风控识别**的状态，并给出安全使用指引。
 

@@ -1,4 +1,4 @@
-# xhs-stealth-crawler · 构建计划与进度
+# Mirage · 构建计划与进度
 
 > 目标：把"小红书爬虫五层反检测加固"沉淀成一个**可发布到 GitHub 的成熟 Claude Code Skill**。
 > 卖点：**不会被检测**（anti-detection / stealth）。
@@ -8,7 +8,7 @@
 ## 一、最终交付物结构
 
 ```
-xhs-stealth-crawler/
+mirage/
 ├── SKILL.md                 # Claude 用的指令（何时触发 / 加固流程 / 安全运行流程）
 ├── README.md                # GitHub 门面（五层防护卖点 + 一键加固演示）
 ├── LICENSE                  # 学习研究用途声明（继承 MediaCrawler 非商用精神）
@@ -72,7 +72,7 @@ xhs-stealth-crawler/
   - （qwen/kimi 今晚模型端超时，已按容灾降级到 deepseek/mimo 完成评审。）
 - **修复后自检②全绿 + 位置核验**：L5 调用锚定 search() 内（186 行）、cdp 方法锚定类内、3 个返回点全注入。
 - **诚实声明**：anti-detection.md 增「已知未覆盖维度」(canvas/点击链/JA3/账号序列)，守「不打包票」铁律。
-- **收尾**：本地 git commit + symlink 进 ~/.claude/skills/xhs-stealth-crawler。
+- **收尾**：本地 git commit + symlink 进 ~/.claude/skills/mirage。
 
 ## 六、验收复核（对照第四节）
 
