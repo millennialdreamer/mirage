@@ -16,11 +16,11 @@ import time
 
 try:
     from human_behavior import simulate_page_activity, human_sleep, warmup
-    from human_interaction import XhsInteractor, SELECTORS
+    from human_interaction import XhsInteractor
     from interaction_policy import Policy
 except ImportError:
     from tools.human_behavior import simulate_page_activity, human_sleep, warmup
-    from tools.human_interaction import XhsInteractor, SELECTORS
+    from tools.human_interaction import XhsInteractor
     from tools.interaction_policy import Policy
 
 # 风控信号：用**完整短语**（笔记正文几乎不会出现），优先在弹窗里查，大幅降低误判。
@@ -34,9 +34,14 @@ DANGER_DIALOG_SEL = ["[role=dialog]", ".reds-dialog", ".verify-dialog",
 
 class MirageLoop:
     def __init__(self, page, dry_run=True, interact_prob=0.15,
-                 conservative=False, max_minutes=30):
+                 conservative=False, max_minutes=30,
+                 platform_tz="Asia/Shanghai"):
+        """
+        platform_tz — 目标平台所在时区（IANA 名称），透传给 Policy。
+            海外操作国内平台时填 "Asia/Shanghai"（看的是平台活跃时段不是操作者本地时间）。
+        """
         self.page = page
-        self.policy = Policy(conservative=conservative)
+        self.policy = Policy(conservative=conservative, platform_tz=platform_tz)
         self.actor = XhsInteractor(page, policy=self.policy, dry_run=dry_run)
         self.interact_prob = interact_prob          # 看到一条笔记→互动的概率（多数只看）
         self.max_seconds = max_minutes * 60
@@ -62,8 +67,8 @@ class MirageLoop:
             return False
 
     async def _visible_cards(self):
-        """识别当前可视区的笔记卡片（多重 fallback）。"""
-        for sel in SELECTORS["note_card"]:
+        """识别当前可视区的笔记卡片（多重 fallback，用当前平台的选择器）。"""
+        for sel in self.actor._selectors.get("note_card", []):
             try:
                 loc = self.page.locator(sel)
                 n = await loc.count()
@@ -123,11 +128,21 @@ class MirageLoop:
                 print("✓ 到达运行时长上限，收工")
                 break
 
+            # —— 时段感知：深夜直接歇 ——
+            slot_mult = self.policy.interact_prob_multiplier()
+            if slot_mult == 0.0:
+                # 深夜（平台时间 2~6 点），真人极少，暂停一段再检查
+                slot = self.policy.current_slot()
+                print(f"  ⏸ 当前平台时段【{slot}】，不适合互动，暂停 600s 后再检查…")
+                await asyncio.sleep(600)   # 10 分钟后重新判断时段
+                continue
+
             # —— 浏览：滚动 + 贝塞尔鼠标 + 阅读停留 ——
             await simulate_page_activity(self.page)
 
             # 本轮"心情"：兴趣有起伏，互动概率随轮波动（真人不是恒定 15%）
-            self._mood = random.uniform(0.5, 1.6)
+            # 同时叠加时段系数：夜间/平稳期降低互动意愿
+            self._mood = random.uniform(0.5, 1.6) * slot_mult
 
             # —— 处理随机 2~4 条笔记；每条都**重新识别**(避免 go_back 后旧引用失效) ——
             for _ in range(random.randint(2, 4)):
@@ -140,7 +155,7 @@ class MirageLoop:
                 await human_sleep(4.0, 0.7, 1.6)    # 互动/浏览之间的自然间隔
 
             rounds += 1
-            print(f"  第 {rounds} 轮完成 | 今日 {self.policy.summary()}")
+            print(f"  第 {rounds} 轮完成 | 时段[{self.policy.current_slot()}×{slot_mult:.1f}] | 今日 {self.policy.summary()}")
             await human_sleep(6.0, 0.7, 1.5)        # 轮间停顿
 
             # —— 偶尔"走神"长停（真人会分心去做别的）——

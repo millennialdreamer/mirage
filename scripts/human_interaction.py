@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-human_interaction.py — Mirage 互动引擎：在小红书页面上"像真人一样"识别并点击
-（点赞 / 关注 / 收藏 / 评论）。
+human_interaction.py — Mirage 互动引擎：在各平台页面上"像真人一样"识别并点击
+（点赞 / 关注 / 收藏 / 评论）。目前深度验证平台：小红书(xhs)。
+其余平台(dy/bili等)选择器为语义化合理猜测，**需按实际页面核对调整**。
 
 ⚠️ 三条安全铁律（写进代码，不靠自觉）：
   1. **dry_run 默认 True** —— 默认只把鼠标贝塞尔移动到位、打印将做什么，但**不真点**。
@@ -22,34 +23,93 @@ except ImportError:                               # 部署到 MediaCrawler/tools
     from tools.human_behavior import human_mouse_move, human_sleep
 
 
-# 小红书页面元素的多重 fallback 选择器（语义优先；class 会随改版变，按实际页面可调）。
+# 多平台元素 fallback 选择器。结构：{平台: {元素: [选择器列表]}}
 # 顺序 = 尝试顺序：稳定语义属性 → role/文本 → class 兜底。
+# ⚠️ xhs 已在实际页面验证；dy / bili 为语义化合理猜测，**需按实际页面核对调整**。
 SELECTORS = {
-    "note_card":   ["section.note-item", "a[href*='/explore/']", "[data-type='note']"],
-    "like":        ["[aria-label*='赞']", "[aria-label*='like']",
-                    "span.like-wrapper", ".interact-container .like-active, .interact-container .like"],
-    "collect":     ["[aria-label*='收藏']", "span.collect-wrapper", ".collect"],
-    "follow":      ["button:has-text('关注'):not(:has-text('已关注'))",
-                    "[aria-label='关注']", ".follow-button:not(.followed)"],
-    "comment_box": ["[contenteditable='true']", "textarea[placeholder*='评论']",
-                    "div.comment-input"],
-    "comment_send":["button:has-text('发送')", "button:has-text('发布')", ".submit"],
+    # -----------------------------------------------------------------------
+    # 小红书 (xhs) —— 已实际页面验证
+    # -----------------------------------------------------------------------
+    "xhs": {
+        "note_card":    ["section.note-item", "a[href*='/explore/']", "[data-type='note']"],
+        "like":         ["[aria-label*='赞']", "[aria-label*='like']",
+                         "span.like-wrapper", ".interact-container .like-active, .interact-container .like"],
+        "collect":      ["[aria-label*='收藏']", "span.collect-wrapper", ".collect"],
+        "follow":       ["button:has-text('关注'):not(:has-text('已关注'))",
+                         "[aria-label='关注']", ".follow-button:not(.followed)"],
+        "comment_box":  ["[contenteditable='true']", "textarea[placeholder*='评论']",
+                         "div.comment-input"],
+        "comment_send": ["button:has-text('发送')", "button:has-text('发布')", ".submit"],
+    },
+
+    # -----------------------------------------------------------------------
+    # 抖音 (dy) —— ⚠️ 语义化猜测，需按实际页面核对调整
+    # 抖音网页版(douyin.com)DOM结构随版本更新频繁，以下为通用语义属性优先策略
+    # -----------------------------------------------------------------------
+    "dy": {
+        "note_card":    ["[data-e2e='feed-active-video']", ".video-feed-item",
+                         "[data-testid='video-item']"],
+        "like":         # 点赞：aria-label 最稳定，其次 data-e2e，class 兜底
+                        ["[aria-label*='点赞']", "[aria-label*='like']",
+                         "[data-e2e='like-icon']", ".like-button",
+                         "button:has-text('赞')"],  # ⚠️ 需核对
+        "follow":       # 关注：text-content 最语义化，未关注状态排除"已关注"
+                        ["button:has-text('关注'):not(:has-text('已关注'))",
+                         "[data-e2e='follow-button']", "[aria-label='关注']",
+                         ".follow-button:not(.disabled)"],  # ⚠️ 需核对
+        "comment_box":  ["[data-e2e='comment-input']", "[contenteditable='true']",
+                         "textarea[placeholder*='评论']", ".comment-input-inner"],
+        "comment_send": ["button:has-text('发送')", "[data-e2e='comment-send']",
+                         "button:has-text('发布')"],
+    },
+
+    # -----------------------------------------------------------------------
+    # B站 (bili) —— ⚠️ 语义化猜测，需按实际页面核对调整
+    # B站(bilibili.com)网页版 wbi 签名较简单，DOM 相对稳定但仍需核对
+    # -----------------------------------------------------------------------
+    "bili": {
+        "note_card":    [".bili-video-card", ".video-card", "[data-report='click']"],
+        "like":         # B站点赞在播放页工具栏，通常有 aria-label
+                        ["[aria-label*='点赞']", "[aria-label*='like']",
+                         ".video-like", ".like.on, .like",
+                         "button.like-btn"],  # ⚠️ 需核对
+        "follow":       # B站关注在UP主头像旁，未关注为"关注"按钮
+                        ["button:has-text('关注'):not(:has-text('已关注'))",
+                         ".follow-btn:not(.be-follow-btn--followed)",
+                         "[aria-label='关注']", ".b-btn--follow"],  # ⚠️ 需核对
+        "comment_box":  ["#comment-box", "textarea[placeholder*='发一条友善的评论']",
+                         "[contenteditable='true']", ".comment-send input"],
+        "comment_send": ["button:has-text('发布')", ".comment-submit",
+                         "button:has-text('发送')"],
+    },
 }
 
 
 class XhsInteractor:
-    """小红书拟人互动器。持有一个 Playwright page。"""
+    """多平台拟人互动器。持有一个 Playwright page。
 
-    def __init__(self, page, policy=None, dry_run=True):
+    向后兼容：不传 platform 参数时默认 'xhs'，行为与旧版完全一致。
+
+    参数：
+        page:     Playwright Page 对象
+        policy:   互动配额策略（可选）
+        dry_run:  默认 True，只演示不真点；显式传 False 才真实互动
+        platform: 平台代码，支持 'xhs'/'dy'/'bili'（默认 'xhs'）
+    """
+
+    def __init__(self, page, policy=None, dry_run=True, platform="xhs"):
         self.page = page
         self.policy = policy
         self.dry_run = dry_run          # 默认只演示不真点
+        self.platform = platform        # 平台选择器分支
         self._mouse = (None, None)      # 维护上次鼠标位置，贝塞尔链式更连贯
+        # 从嵌套 SELECTORS 中取对应平台，fallback 到 xhs
+        self._selectors = SELECTORS.get(platform, SELECTORS["xhs"])
 
     # ---- 识别层：多重 fallback ----
     async def _resolve(self, key):
-        """按 SELECTORS[key] 顺序找第一个可见元素，找不到返回 None。"""
-        for sel in SELECTORS.get(key, []):
+        """按当前平台 SELECTORS[key] 顺序找第一个可见元素，找不到返回 None。"""
+        for sel in self._selectors.get(key, []):
             try:
                 loc = self.page.locator(sel).first
                 if await loc.count() and await loc.is_visible():

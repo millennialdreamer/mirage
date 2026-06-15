@@ -1,0 +1,14 @@
+# Mirage — Python 依赖声明
+#
+# apply_hardening.py   零外部依赖（纯标准库：os/re/shutil/sys/urllib/argparse/ast）
+# safe_profile.py      零外部依赖
+#
+# 以下脚本需要 playwright：
+#   - verify_stealth.py      （打开浏览器验证 stealth.min.js 生效）
+#   - human_behavior.py      （贝塞尔鼠标轨迹，供 apply_hardening 注入到目标 core.py 使用）
+#   - human_interaction.py   （拟人互动引擎：点赞/关注/收藏/评论）
+#   - mirage_loop.py         （拟人刷号主循环）
+#
+# 安装 playwright 浏览器内核（仅一次）：
+#   playwright install chromium
+playwright>=1.40

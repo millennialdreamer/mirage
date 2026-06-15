@@ -105,6 +105,20 @@ await loop.run()
 
 仅供学习与研究。**加固只能降低被检测概率，无法消除** —— 任何爬虫都有被风控的可能。使用者须遵守小红书的使用条款与 robots 规则，合理控制频率，不得用于商业或任何不当用途。因使用本工具产生的一切后果由使用者自负。
 
+## ⚠️ 已知边界 / 不支持
+
+Mirage 是针对 MediaCrawler **网页版爬虫**的行为层加固工具，以下场景**超出其能力范围**，请勿误用：
+
+1. **App 抓取（客户端）**：Mirage 只加固 Playwright 驱动的**网页版**。手机 App、桌面客户端要抓取数据，需要抓包（Charles/mitmproxy）、Hook（Frida）、模拟器等完全不同的技术栈，Mirage 对此无能为力。
+
+2. **海外平台**：TikTok、Instagram、X（Twitter）、YouTube 等海外平台使用的是**不同爬虫框架**，不在 MediaCrawler 支持范围内，Mirage 自然也不覆盖。
+
+3. **签名算法逆向**：抖音 `a_bogus`、小红书 `x-s`、快手签名等由 MediaCrawler 上游维护。平台一旦更新签名算法，抓取可能**暂时失效**，需等待上游跟进修复。Mirage 不参与签名逆向，`weekly_maintenance.sh` 会提示你关注上游更新。
+
+4. **极端网络环境**：弱网、断线重连、代理不稳等场景需要配合专用的 `network_resilience` 模块处理重试与恢复。Mirage 核心模块假设网络基本畅通，不内置断线容灾。
+
+> 简单说：Mirage 做好一件事——**让 MediaCrawler 的网页端自动化行为更像真人**。超出这个范围的需求，请寻找对应专项工具。
+
 ## 📄 License
 
 本项目以学习研究为目的发布，继承上游 MediaCrawler 的非商用精神。详见 [LICENSE](LICENSE)。
