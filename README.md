@@ -27,6 +27,8 @@ python scripts/apply_hardening.py /path/to/MediaCrawler --check     # 体检五�
 
 > 原理逐层拆解见 [docs/anti-detection.md](docs/anti-detection.md)。
 
+> 🌐 **不只小红书**：五层加固通用于 MediaCrawler 全部 **7 个平台**（小红书 / 抖音 / 快手 / B站 / 微博 / 贴吧 / 知乎），一条 `-p all` 全加固。各平台反爬强度分级与建议参数见 [docs/platforms.md](docs/platforms.md)。
+
 ## 📦 前置依赖
 
 - **Python 3.11+**（与 MediaCrawler 一致）

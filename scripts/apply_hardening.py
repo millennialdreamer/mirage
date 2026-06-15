@@ -73,19 +73,32 @@ def backup(path, dry):
 # ════════════════════════════════════════════════════════════════════
 # 定位与校验
 # ════════════════════════════════════════════════════════════════════
-def locate(root):
-    """确认 root 是一个 MediaCrawler 安装，返回关键文件路径字典。"""
+# MediaCrawler 支持的平台：别名 -> (目录名, 中文名, 反爬强度)
+PLATFORMS = {
+    "xhs":   ("xhs",      "小红书", "中"),
+    "dy":    ("douyin",   "抖音",   "极高"),
+    "ks":    ("kuaishou", "快手",   "高"),
+    "bili":  ("bilibili", "B站",    "中低"),
+    "wb":    ("weibo",    "微博",   "中"),
+    "tieba": ("tieba",    "贴吧",   "低"),
+    "zhihu": ("zhihu",    "知乎",   "中"),
+}
+
+
+def locate(root, platform="xhs"):
+    """确认 root 是 MediaCrawler 安装，返回指定平台的关键文件路径。"""
+    pdir = PLATFORMS.get(platform, (platform, platform, "?"))[0]
     files = {
         "base_config": os.path.join(root, "config", "base_config.py"),
-        "core": os.path.join(root, "media_platform", "xhs", "core.py"),
+        "core": os.path.join(root, "media_platform", pdir, "core.py"),
         "cdp": os.path.join(root, "tools", "cdp_browser.py"),
         "stealth": os.path.join(root, "libs", "stealth.min.js"),
+        "platform": platform,
     }
-    if not os.path.isfile(files["base_config"]) or not os.path.isfile(files["core"]):
-        sys.exit(
-            _r(f"✗ {root} 看起来不是 MediaCrawler 安装")
-            + "\n  缺少 config/base_config.py 或 media_platform/xhs/core.py"
-        )
+    if not os.path.isfile(files["base_config"]):
+        sys.exit(_r(f"✗ {root} 不是 MediaCrawler 安装（缺 config/base_config.py）"))
+    if not os.path.isfile(files["core"]):
+        sys.exit(_r(f"✗ 找不到 {platform} 平台的 core.py：media_platform/{pdir}/core.py"))
     return files
 
 
@@ -257,9 +270,10 @@ def _ensure_import_random(text):
     return "\n".join(lines), True
 
 
-def patch_core(path, dry):
-    """core.py：L2 抖动（稳）+ L4 预热（尽力）+ L5 鼠标模拟（尽力）。"""
-    print(_b("\n[L2/L4/L5] media_platform/xhs/core.py"))
+def patch_core(path, dry, platform="xhs"):
+    """core.py：L2 抖动（稳）+ L4 预热（尽力）+ L5 鼠标模拟（尽力）。锚点平台无关。"""
+    pdir = PLATFORMS.get(platform, (platform,))[0]
+    print(_b(f"\n[L2/L4/L5] media_platform/{pdir}/core.py"))
     text = read(path)
     orig = text
     did_any = False
@@ -289,33 +303,41 @@ def patch_core(path, dry):
     else:
         print(f"    {_y('⚠')} 没找到固定 sleep 锚点 —— 此版本可能已改写，跳过 L2")
 
-    # —— L4: 启动预热 —— 锚点：search() 的 Begin search 日志行 ——
+    # —— L4: 启动预热 —— 锚点：async def search 方法体开头（平台无关，兼容有无 -> None）——
     if "L4: human warm-up" in text:
         print(f"    {_g('·')} L4 预热已存在（幂等跳过）")
     else:
-        warm_anchor = re.search(
-            r'^\s*utils\.logger\.info\(\s*["\']\[XiaoHongShuCrawler\.search\] Begin search.*$',
+        search_def = re.search(
+            r"^    async def search\(self\)(?:\s*->\s*[^\n:]+)?\s*:[^\n]*\n",
             text, re.MULTILINE,
         )
-        if warm_anchor:
-            idx = warm_anchor.end()
-            text = text[:idx] + "\n" + WARMUP_BLOCK.rstrip("\n") + text[idx:]
+        if search_def:
+            idx = search_def.end()
+            # 跳过紧随的单行 docstring（若有），让预热插在它之后，保留 docstring
+            doc = re.match(r'\s*(?:"""[^\n]*"""|\'\'\'[^\n]*\'\'\')\n', text[idx:])
+            if doc:
+                idx += doc.end()
+            block = WARMUP_BLOCK if WARMUP_BLOCK.endswith("\n") else WARMUP_BLOCK + "\n"
+            text = text[:idx] + block + text[idx:]
             did_any = True
             print(f"    {_g('✓') if not dry else _y('[dry]')} L4: 注入启动预热")
         else:
-            print(f"    {_y('⚠')} 没找到 search() 起始日志锚点，跳过 L4（可手动加，见 docs）")
+            print(f"    {_y('⚠')} 没找到 async def search 锚点，跳过 L4（可手动加）")
 
     # —— L5: 鼠标模拟方法 + 在翻页抖动 sleep 前调用 —— 尽力层 ——
     if "_xhs_stealth_human_activity" in text:
         print(f"    {_g('·')} L5 鼠标模拟已存在（幂等跳过）")
     else:
         injected_method = False
-        # 方法定义：插在 get_creators_and_notes 之前（稳定锚点）
-        m_anchor = re.search(r"^    async def get_creators_and_notes\(", text, re.MULTILINE)
-        if m_anchor:
-            idx = m_anchor.start()
-            text = text[:idx] + HUMAN_METHOD.lstrip("\n") + "\n" + text[idx:]
-            injected_method = True
+        # 方法定义：插在 search 方法**之后**的下一个同级方法前（平台无关；
+        # 原 get_creators_and_notes 是小红书特有，不通用）
+        sdef = re.search(r"^    async def search\(self\)", text, re.MULTILINE)
+        if sdef:
+            nd = re.search(r"^    (?:async )?def ", text[sdef.end():], re.MULTILINE)
+            if nd:
+                idx = sdef.end() + nd.start()
+                text = text[:idx] + HUMAN_METHOD.lstrip("\n") + "\n" + text[idx:]
+                injected_method = True
         # 调用点：限定在 search() 方法体内的第一处 L2 jitter 前。
         # 避免"第一个 L2 jitter 在别的函数"导致调用被注入到错误函数里。
         call_indent, call_global_start = None, None
@@ -450,37 +472,46 @@ def do_revert(files, root):
 
 # ════════════════════════════════════════════════════════════════════
 def main():
-    ap = argparse.ArgumentParser(description="给 MediaCrawler 打入五层反检测加固")
+    ap = argparse.ArgumentParser(description="给 MediaCrawler 打入五层反检测加固（多平台）")
     ap.add_argument("path", help="MediaCrawler 安装根目录")
+    ap.add_argument("--platform", "-p", default="xhs",
+                    help="平台：xhs|dy|ks|bili|wb|tieba|zhihu|all（默认 xhs）")
     ap.add_argument("--dry-run", action="store_true", help="只打印将做的改动，不落盘")
     ap.add_argument("--check", action="store_true", help="体检：报告每层加固状态")
     ap.add_argument("--revert", action="store_true", help="从 .bak 完整还原")
     args = ap.parse_args()
 
     root = os.path.abspath(os.path.expanduser(args.path))
-    files = locate(root)
+    if args.platform != "all" and args.platform not in PLATFORMS:
+        sys.exit(_r(f"✗ 未知平台 {args.platform}。可选：{', '.join(PLATFORMS)} 或 all"))
+    targets = list(PLATFORMS) if args.platform == "all" else [args.platform]
 
-    if args.check:
-        do_check(files)
-        return
-    if args.revert:
-        do_revert(files, root)
-        return
-
-    print(_b(f"目标：{root}"))
-    if args.dry_run:
-        print(_y("（dry-run：以下改动不会真正落盘）"))
-
-    patch_base_config(files["base_config"], args.dry_run)
-    patch_cdp_browser(files["cdp"], args.dry_run)
-    patch_core(files["core"], args.dry_run)
-    ensure_stealth_js(files["stealth"], args.dry_run)
-    deploy_modules(root, args.dry_run)
+    for plat in targets:
+        files = locate(root, plat)
+        _, pname, level = PLATFORMS[plat]
+        if args.check:
+            print(_b(f"\n━━━ {pname}({plat}) · 反爬强度:{level} ━━━"))
+            do_check(files)
+            continue
+        if args.revert:
+            print(_b(f"\n━━━ 还原 {pname}({plat}) ━━━"))
+            do_revert(files, root)
+            continue
+        print(_b(f"\n━━━ 加固 {pname}({plat}) · 反爬强度:{level} ━━━"))
+        if args.dry_run:
+            print(_y("（dry-run：以下改动不会真正落盘）"))
+        patch_base_config(files["base_config"], args.dry_run)
+        patch_cdp_browser(files["cdp"], args.dry_run)
+        patch_core(files["core"], args.dry_run, plat)
+        ensure_stealth_js(files["stealth"], args.dry_run)
+        deploy_modules(root, args.dry_run)
+        if level in ("极高", "高") and not args.dry_run:
+            print(_y(f"  ⚠ {pname} 反爬{level}：建议把 CRAWLER_MAX_SLEEP_SEC 再调大、量更小"))
 
     print(_b("\n═══ 完成 ═══"))
-    print("  体检： python apply_hardening.py <path> --check")
-    print("  还原： python apply_hardening.py <path> --revert")
-    if not args.dry_run:
+    print("  体检： python apply_hardening.py <path> -p all --check")
+    print("  还原： python apply_hardening.py <path> -p <平台> --revert")
+    if not args.dry_run and not args.check and not args.revert:
         print(_y("  ⚠ 务必先用小号试跑，主号永不碰爬虫"))
 
 
