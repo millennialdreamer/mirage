@@ -6,7 +6,7 @@ description: |
   关键词：小红书爬虫、反检测、防风控、被警告、被限流、被封号、stealth、MediaCrawler 加固、安全点赞、自动关注、拟人互动、养号、刷号、互动不被封、点击质量、有效点击。
 metadata:
   trigger: 小红书爬虫防检测 / 加固 / 被警告
-  source: arggjarvs/mirage
+  source: millennialdreamer/mirage
 ---
 
 # Mirage

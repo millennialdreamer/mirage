@@ -41,7 +41,7 @@ python scripts/apply_hardening.py /path/to/MediaCrawler --check     # 体检五�
 前提：你已经装好并能跑通 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)。
 
 ```bash
-git clone https://github.com/arggjarvs/mirage.git
+git clone https://github.com/millennialdreamer/mirage.git
 cd mirage
 
 # 1. 先 dry-run，看清楚将要改哪些文件（不落盘）

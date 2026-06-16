@@ -41,7 +41,7 @@ python scripts/apply_hardening.py /path/to/MediaCrawler --check     # Verify all
 Prerequisite: you have MediaCrawler installed and working.
 
 ```bash
-git clone https://github.com/arggjarvs/mirage.git
+git clone https://github.com/millennialdreamer/mirage.git
 cd mirage
 
 # 1. Dry-run first to see which files will be changed (no disk writes)
