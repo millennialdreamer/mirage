@@ -81,6 +81,6 @@
   - ✅ 测真锚点（tests/test_real_anchors.py；真实 7 平台 core.py 回归全绿，pytest 2 passed；"通吃 7 平台"经真代码验证属实）
 - 🔄 第四圈（档二·跃迁线）进行中：
   - ✅ 指纹 benchmark（`fingerprint_benchmark.py`：BotScore 量化 + 风险等级 + JSON 证据报告；国产审采纳 3/5，移除易误报 permMismatch、补 languages、加免责防假精确；self-test 过）
-  - ⬜ 用户动线 README 重组（按"我怕被封 / 被警告了 / 想养号 / 扩平台"组织）
+  - ✅ 用户动线导航（README 顶部「按你的目的找路」导航表：加固/救急/养号/扩平台/证明/原理 6 入口；导航表方式四两拨千斤，不推翻结构、不丢已有细节）
   - ⬜ 打包 pyproject（`package-dir` 映射 scripts，不物理重命名 → 兼顾 skill 结构）+ `mirage` CLI
 - ⬜ 第五圈（再评审，验收是否达 ~9/10）

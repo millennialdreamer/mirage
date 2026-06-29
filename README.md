@@ -14,6 +14,17 @@
 > 工具默认就帮你守住三条红线：① 互动引擎 `dry_run` 默认开，绝不替你自动实跑；② 遇验证码立即停手，**不破解人机验证**；③ 不碰主号、不做商业刷量 / 刷粉。
 > 完整边界见 [使用政策与伦理边界](docs/usage-policy.md)。
 
+## 🧭 按你的目的找路
+
+| 你想做的事 | 去哪 |
+|-----------|------|
+| 怕被封，给爬虫加固 | 下方「快速开始」：`apply_hardening.py --dry-run` → 真打 → `--check` |
+| 被警告 / 限流了怎么救 | [docs/safe-usage.md](docs/safe-usage.md)：立刻停手 → 切 safe 档 → 换小号 |
+| 安全养号 / 点赞关注收藏 | 下方「互动引擎」（dry-run 默认，绝不替你实跑） |
+| 扩到抖音 / B站 等别的平台 | 一条 `-p all` 通吃 7 平台 → [docs/platforms.md](docs/platforms.md) |
+| 证明加固真有效（出数据） | `python scripts/fingerprint_benchmark.py`：加固前后 BotScore 量化对比 |
+| 弄懂原理（五层怎么防） | [docs/anti-detection.md](docs/anti-detection.md) |
+
 ```bash
 python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run   # 先看会改什么
 python scripts/apply_hardening.py /path/to/MediaCrawler             # 真打（自动备份）
