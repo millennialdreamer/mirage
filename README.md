@@ -9,6 +9,11 @@
 
 **两大能力**：① 给爬虫做**五层抓取加固**（下方）；② 一套**拟人互动引擎**做安全的点赞/关注/收藏/评论（见下文「互动引擎」）。
 
+> [!IMPORTANT]
+> **用途边界**：Mirage 仅用于**学习、研究与个人合规测试**。请只用**小号**、控制频率、遵守目标平台条款与 robots 规则。
+> 工具默认就帮你守住三条红线：① 互动引擎 `dry_run` 默认开，绝不替你自动实跑；② 遇验证码立即停手，**不破解人机验证**；③ 不碰主号、不做商业刷量 / 刷粉。
+> 完整边界见 [使用政策与伦理边界](docs/usage-policy.md)。
+
 ```bash
 python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run   # 先看会改什么
 python scripts/apply_hardening.py /path/to/MediaCrawler             # 真打（自动备份）
