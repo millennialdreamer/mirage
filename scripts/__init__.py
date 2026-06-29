@@ -5,4 +5,4 @@
   - pip 安装后：`import mirage.apply_hardening` / `mirage` 命令可用；
   - 同时保留扁平 `scripts/` 结构，供 Claude Code skill 识别与直接 `python scripts/xxx.py` 运行。
 """
-__version__ = "0.3.0"
+__version__ = "0.5.0"

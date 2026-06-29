@@ -1,5 +1,27 @@
 # Changelog
 
+> 版本约定：发布前为 `0.x.y`（语义化）——x 升一位 = 一组成熟能力 / 里程碑，y = 修补。
+
+## v0.5 — 成熟化 / 可信发布（loop 自驱多圈打磨）
+
+经多方独立评审（按 GitHub 10k★ 标准）+ 写判分离迭代，成熟度从 6/10 → ~8/10（三方复评：工程 8 / 难反制 8.5 / 产品 7.5）。
+
+**Added**
+- 合规护栏：README 首屏用途边界三红线 + `docs/usage-policy.md` 伦理边界（防 GitHub 删库）
+- `fingerprint_benchmark.py`：加固前后 BotScore 量化对比 + 风险等级 + JSON 证据报告（"可证明的拟人"，带诚实免责）
+- 打包：`pyproject.toml`（package-dir 映射 scripts 成 mirage 包，可 `pip install`）+ 统一 `mirage` CLI（apply/doctor/verify/benchmark）
+- `tests/test_real_anchors.py`：真实 MediaCrawler 7 平台原始 core.py 锚点回归（真 pytest）
+- `scripts/ci.sh`：本地 CI（pytest + ruff + mypy + 自检），代替 GitHub Actions
+- `docs/tls-fingerprint.md`：TLS/JA3 诚实边界分析（CDP 真 Chrome 页面层天然真实）
+- README 顶部「按你的目的找路」用户动线导航
+
+**Changed / Fixed**
+- 核心可靠性：`write()` 升级原子写（tempfile+fsync+os.replace）；新增 `write_py_safe` 统一落盘口（原子写 + 写后 AST 校验 + 失败回滚），三处补丁全接入
+- 运行时层三语境 import（扁平 / 部署 tools / pip 包）
+- ruff/mypy 清理 21 个 lint/类型问题
+
+---
+
 ## v0.4 — 多平台支持
 
 **Added**

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mirage-antidetect"
-version = "0.3.0"
+version = "0.5.0"
 description = "给 MediaCrawler 打入五层反检测加固 + 拟人互动引擎的工具集（仅供学习研究）"
 readme = "README.md"
 requires-python = ">=3.9"
