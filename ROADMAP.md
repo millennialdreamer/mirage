@@ -84,4 +84,7 @@
   - ✅ 用户动线导航（README 顶部「按你的目的找路」6 入口导航表，不推翻结构、不丢细节）
   - ✅ 打包 pyproject + `mirage` CLI（`package-dir` 映射 scripts **不重命名**→保 skill 结构；`mirage apply/doctor/verify/benchmark`；运行时层三语境 import；国产审采纳 2 条、挡 2 条会砸 skill 的伪建议）
 - ✅ 第五圈（再评审验收）：三方独立复评 **工程 8 / 难反制 8.5 / 产品 7.5 ≈ 8/10**（原 6 → +2）。三方均判"敢放 GitHub / 敢用 / 能活"= 达**可信发布门槛**，但**未到 9**。
-- ⬜ 第六圈（档三·冲 9）：本地 CI + 全量类型注解/mypy（工程闭环，ROI 最高、不依赖浏览器）→ TLS/JA3 指纹（MiMo 标"最该先补"）→ 加固失效监测 → 版本节奏 + 解耦上游
+- 🔄 第六圈（档三·冲 9）进行中：
+  - ✅ 本地 CI（`scripts/ci.sh`：pytest + benchmark 自检 + ruff + mypy，代替 GitHub Actions）+ pyproject 加 ruff/mypy 配置；**首跑即抓修 21 个 lint/类型真问题**（f-string/import 排序/分号/no-redef）；三语境 import 复验仍 ok
+  - ⬜ TLS/JA3 诚实分析（CDP 真 Chrome 页面层 TLS 天然真实 / httpx API 层属请求层缺口 → 文档化边界 + curl-impersonate 指引，不硬刚）
+  - ⬜ 类型注解（核心公共接口，非全量）/ 加固失效监测 / 版本节奏 / 解耦上游
