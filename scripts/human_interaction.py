@@ -19,8 +19,11 @@ import random
 
 try:                                              # scripts/ 下直接跑
     from human_behavior import human_mouse_move, human_sleep
-except ImportError:                               # 部署到 MediaCrawler/tools/ 后
-    from tools.human_behavior import human_mouse_move, human_sleep
+except ImportError:
+    try:                                          # 部署到 MediaCrawler/tools/ 后
+        from tools.human_behavior import human_mouse_move, human_sleep
+    except ImportError:                           # pip 安装后的 mirage 包语境
+        from mirage.human_behavior import human_mouse_move, human_sleep
 
 
 # 多平台元素 fallback 选择器。结构：{平台: {元素: [选择器列表]}}

@@ -79,8 +79,8 @@
   - ✅ 合规护栏（README 首屏用途边界 + docs/usage-policy.md）
   - ✅ 原子写 + AST 校验（`write_py_safe` 统一落盘口；国产 QA 审 9 条，终审采纳 2 条、挡掉 7 条；自测 9 项全绿）
   - ✅ 测真锚点（tests/test_real_anchors.py；真实 7 平台 core.py 回归全绿，pytest 2 passed；"通吃 7 平台"经真代码验证属实）
-- 🔄 第四圈（档二·跃迁线）进行中：
-  - ✅ 指纹 benchmark（`fingerprint_benchmark.py`：BotScore 量化 + 风险等级 + JSON 证据报告；国产审采纳 3/5，移除易误报 permMismatch、补 languages、加免责防假精确；self-test 过）
-  - ✅ 用户动线导航（README 顶部「按你的目的找路」导航表：加固/救急/养号/扩平台/证明/原理 6 入口；导航表方式四两拨千斤，不推翻结构、不丢已有细节）
-  - ⬜ 打包 pyproject（`package-dir` 映射 scripts，不物理重命名 → 兼顾 skill 结构）+ `mirage` CLI
-- ⬜ 第五圈（再评审，验收是否达 ~9/10）
+- ✅ 第四圈（档二·跃迁线）：**完成**
+  - ✅ 指纹 benchmark（`fingerprint_benchmark.py`：BotScore 量化 + 风险等级 + JSON 证据报告；国产审采纳 3/5；self-test 过）
+  - ✅ 用户动线导航（README 顶部「按你的目的找路」6 入口导航表，不推翻结构、不丢细节）
+  - ✅ 打包 pyproject + `mirage` CLI（`package-dir` 映射 scripts **不重命名**→保 skill 结构；`mirage apply/doctor/verify/benchmark`；运行时层三语境 import；国产审采纳 2 条、挡 2 条会砸 skill 的伪建议）
+- ⬜ 第五圈（再评审验收：重新按 10k 标准打分，是否达 ~9/10）

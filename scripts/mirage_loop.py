@@ -19,9 +19,14 @@ try:
     from human_interaction import XhsInteractor
     from interaction_policy import Policy
 except ImportError:
-    from tools.human_behavior import simulate_page_activity, human_sleep, warmup
-    from tools.human_interaction import XhsInteractor
-    from tools.interaction_policy import Policy
+    try:
+        from tools.human_behavior import simulate_page_activity, human_sleep, warmup
+        from tools.human_interaction import XhsInteractor
+        from tools.interaction_policy import Policy
+    except ImportError:                           # pip 安装后的 mirage 包语境
+        from mirage.human_behavior import simulate_page_activity, human_sleep, warmup
+        from mirage.human_interaction import XhsInteractor
+        from mirage.interaction_policy import Policy
 
 # 风控信号：用**完整短语**（笔记正文几乎不会出现），优先在弹窗里查，大幅降低误判。
 # 反例：单个"验证码"三字可能出现在笔记正文里 → 会误熔断，所以不用单词。

@@ -34,3 +34,7 @@ packages = ["mirage"]
 
 [tool.setuptools.package-dir]
 mirage = "scripts"
+
+# weekly_maintenance.sh 等非 .py 不打进包（包内只留 Python 模块）
+[tool.setuptools.exclude-package-data]
+mirage = ["*.sh"]
