@@ -498,7 +498,7 @@ def do_revert(files, root):
 
 
 # ════════════════════════════════════════════════════════════════════
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="给 MediaCrawler 打入五层反检测加固（多平台）")
     ap.add_argument("path", help="MediaCrawler 安装根目录")
     ap.add_argument("--platform", "-p", default="xhs",
@@ -506,7 +506,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="只打印将做的改动，不落盘")
     ap.add_argument("--check", action="store_true", help="体检：报告每层加固状态")
     ap.add_argument("--revert", action="store_true", help="从 .bak 完整还原")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     root = os.path.abspath(os.path.expanduser(args.path))
     if args.platform != "all" and args.platform not in PLATFORMS:
