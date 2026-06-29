@@ -86,5 +86,5 @@
 - ✅ 第五圈（再评审验收）：三方独立复评 **工程 8 / 难反制 8.5 / 产品 7.5 ≈ 8/10**（原 6 → +2）。三方均判"敢放 GitHub / 敢用 / 能活"= 达**可信发布门槛**，但**未到 9**。
 - 🔄 第六圈（档三·冲 9）进行中：
   - ✅ 本地 CI（`scripts/ci.sh`：pytest + benchmark 自检 + ruff + mypy，代替 GitHub Actions）+ pyproject 加 ruff/mypy 配置；**首跑即抓修 21 个 lint/类型真问题**（f-string/import 排序/分号/no-redef）；三语境 import 复验仍 ok
-  - ⬜ TLS/JA3 诚实分析（CDP 真 Chrome 页面层 TLS 天然真实 / httpx API 层属请求层缺口 → 文档化边界 + curl-impersonate 指引，不硬刚）
+  - ✅ TLS/JA3 诚实分析（MiMo 深析 + 我裁决 ②：CDP 真 Chrome 页面层 TLS 天然真实、签名 httpx 层缺口属请求层）→ 产出 docs/tls-fingerprint.md（划界 + curl_cffi 指引，不越界接管）
   - ⬜ 类型注解（核心公共接口，非全量）/ 加固失效监测 / 版本节奏 / 解耦上游
