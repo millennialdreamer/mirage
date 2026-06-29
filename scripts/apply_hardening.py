@@ -54,8 +54,27 @@ def read(path):
 
 
 def write(path, text):
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+    """原子写：先写同目录临时文件、fsync，再 os.replace 原子替换。
+    避免写到一半被中断（崩溃/磁盘满/断电）而留下半截损坏的目标文件。
+    假设 path 是普通文件（MediaCrawler 源码均如此）；不处理符号链接。"""
+    import tempfile
+    d = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.path.exists(path):
+            try:
+                shutil.copystat(path, tmp)   # 尽量保留原权限/时间戳
+            except OSError:
+                pass                          # 异常文件系统不支持则忽略，不阻断写入
+        os.replace(tmp, path)            # 同一文件系统上原子替换
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
 
 
 def backup(path, dry):
@@ -68,6 +87,22 @@ def backup(path, dry):
         return
     shutil.copy2(path, bak)
     print(f"    {_g('✓')} 已备份 -> {os.path.basename(bak)}")
+
+
+def write_py_safe(path, text):
+    """给 .py 源码打补丁的唯一安全落盘口：原子写 + 写后 ast.parse 语法自检；
+    一旦语法损坏，立即从 .bak 回滚并退出，绝不把损坏的源码留给用户。
+    前提：调用前已 backup(path)（三个 patch_* 都遵守先备份后改写）。"""
+    import ast
+    write(path, text)                       # 原子落盘
+    try:
+        ast.parse(read(path))
+    except SyntaxError as e:
+        bak = path + BAK_SUFFIX
+        if os.path.isfile(bak):
+            write(path, read(bak))   # 回滚也走原子写，避免回滚中断再次损坏
+            sys.exit(_r(f"✗ {os.path.basename(path)} 补丁后语法错误，已从备份回滚：{e}"))
+        sys.exit(_r(f"✗ {os.path.basename(path)} 补丁后语法错误，且无 .bak 可回滚：{e}"))
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -140,7 +175,7 @@ def patch_base_config(path, dry):
         text = pat.sub(rf"\g<1>{target}\g<3>", text, count=1)
         print(f"    {_g('✓') if not dry else _y('[dry]')} {key}: {cur} -> {target}  （{why}）")
     if changed and not dry:
-        write(path, text)
+        write_py_safe(path, text)
     if not changed:
         print(f"    {_g('全部已是安全值')}")
 
@@ -203,7 +238,7 @@ def patch_cdp_browser(path, dry):
     if dry:
         print(f"    {_y('[dry]')} 将注入 _auto_inject_stealth + {len(rets)} 处调用")
     else:
-        write(path, new)
+        write_py_safe(path, new)
         print(f"    {_g('✓')} 已注入方法 + {len(rets)} 处调用")
 
 
@@ -365,15 +400,7 @@ def patch_core(path, dry, platform="xhs"):
     if did_any and text != orig:
         if not dry:
             backup(path, dry)
-            write(path, text)
-        # 落盘前做一次语法自检，崩了就回滚
-        if not dry:
-            import ast
-            try:
-                ast.parse(read(path))
-            except SyntaxError as e:
-                shutil.copy2(path + BAK_SUFFIX, path)
-                sys.exit(_r(f"✗ core.py 补丁后语法错误，已自动回滚：{e}"))
+            write_py_safe(path, text)   # 原子写 + AST 自检 + 失败回滚（统一入口）
             print(f"    {_g('✓ 语法自检通过')}")
     elif not did_any:
         print(f"    {_g('core.py 无需改动或已全部加固')}")
