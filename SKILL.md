@@ -20,6 +20,7 @@ metadata:
 | `apply_hardening.py` | ⭐一键给 MediaCrawler 打入五层加固（幂等 / 自动备份 / 可回滚） |
 | `safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换 |
 | `verify_stealth.py` | 指纹自检：确认 stealth 真的隐藏了 webdriver 等特征 |
+| `fingerprint_benchmark.py` | 指纹 benchmark：加固前后 BotScore 量化对比 + 证据报告（升级版自检，真跑让用户手动） |
 | `human_behavior.py` | 人类行为模拟（贝塞尔鼠标 / 拟人节奏，被互动引擎复用） |
 | `weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游补丁 |
 | `human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（**dry-run 默认**） |

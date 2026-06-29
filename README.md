@@ -69,6 +69,7 @@ python scripts/apply_hardening.py ~/path/to/MediaCrawler --revert
 | `scripts/apply_hardening.py` | ⭐核心：一键打入五层加固，幂等 / 自动备份 / 可回滚 / dry-run / 体检 |
 | `scripts/safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换，并预估抓取速率 |
 | `scripts/verify_stealth.py` | 指纹自检：开浏览器对比"注入前/后"，确认 webdriver 等特征被隐藏 |
+| `scripts/fingerprint_benchmark.py` | ⭐指纹 benchmark：加固前后 **BotScore(0~100) 量化对比** + 风险等级 + JSON 证据报告（"可证明的拟人"；真跑请自己手动） |
 | `scripts/human_behavior.py` | 人类行为模拟模块（抖动睡眠 / 预热 / 鼠标滚动），可手动集成复用 |
 | `scripts/weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游有无反检测补丁 |
 | `scripts/human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（dry-run 默认） |
