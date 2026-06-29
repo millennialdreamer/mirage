@@ -184,7 +184,8 @@ def self_test():
     assert rep["plain"]["risk_level"] == "高" and rep["stealth"]["risk_level"] == "低"
     assert isinstance(rep["stealth"]["flags"], list)
     # 单调性：去掉一个特征，分数必须下降
-    less = dict(MOCK_PLAIN); less["webdriver"] = False
+    less = dict(MOCK_PLAIN)
+    less["webdriver"] = False
     assert score_fingerprint(less)[0] < bs_p, "去掉 webdriver 后分应下降"
     print("\n🎉 self-test 通过：评分单调、裸高加固低、改善显著、报告结构完整")
 

@@ -328,7 +328,7 @@ async def _demo_circuit_breaker():
         except ConnectionError:
             print(f"  第{i+1}次：失败 | 状态：{cb.status()}")
 
-    print(f"  等待 3s 后自动进入 HALF_OPEN…")
+    print("  等待 3s 后自动进入 HALF_OPEN…")
     await asyncio.sleep(3.1)
     print(f"  当前状态：{cb.status()}")
     print("=== 演示结束 ===")

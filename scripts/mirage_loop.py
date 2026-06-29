@@ -15,16 +15,16 @@ import random
 import time
 
 try:
-    from human_behavior import simulate_page_activity, human_sleep, warmup
+    from human_behavior import human_sleep, simulate_page_activity, warmup
     from human_interaction import XhsInteractor
     from interaction_policy import Policy
 except ImportError:
     try:
-        from tools.human_behavior import simulate_page_activity, human_sleep, warmup
+        from tools.human_behavior import human_sleep, simulate_page_activity, warmup
         from tools.human_interaction import XhsInteractor
         from tools.interaction_policy import Policy
     except ImportError:                           # pip 安装后的 mirage 包语境
-        from mirage.human_behavior import simulate_page_activity, human_sleep, warmup
+        from mirage.human_behavior import human_sleep, simulate_page_activity, warmup
         from mirage.human_interaction import XhsInteractor
         from mirage.interaction_policy import Policy
 

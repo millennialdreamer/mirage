@@ -213,7 +213,7 @@ def patch_cdp_browser(path, dry):
     rets = list(ret_pat.finditer(text))
     if not rets:
         print(f"    {_y('⚠')} 没找到 `return browser_context` 锚点 —— 此版本结构不同")
-        print(f"      请手动在 CDP 启动后调用一次 stealth 注入（见 docs/anti-detection.md）")
+        print("      请手动在 CDP 启动后调用一次 stealth 注入（见 docs/anti-detection.md）")
         return
 
     backup(path, dry)
@@ -419,7 +419,7 @@ def ensure_stealth_js(path, dry):
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
-        print(f"    下载中 …")
+        print("    下载中 …")
         with urllib.request.urlopen(STEALTH_URL, timeout=30) as resp:
             data = resp.read()
         if b"webdriver" not in data:

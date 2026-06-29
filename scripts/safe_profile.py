@@ -13,8 +13,8 @@
 
 import os
 import re
-import sys
 import shutil
+import sys
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "base_config.py")
 BACKUP_PATH = CONFIG_PATH + ".bak"

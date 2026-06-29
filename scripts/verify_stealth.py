@@ -79,7 +79,7 @@ def show(title, fp):
         for f in flags:
             print(f"    ⚠ {f}")
     else:
-        print(f"    ✓ 未发现明显机器人特征")
+        print("    ✓ 未发现明显机器人特征")
     return flags
 
 

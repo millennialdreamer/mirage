@@ -38,3 +38,16 @@ mirage = "scripts"
 # weekly_maintenance.sh 等非 .py 不打进包（包内只留 Python 模块）
 [tool.setuptools.exclude-package-data]
 mirage = ["*.sh"]
+
+[tool.ruff]
+line-length = 140                   # 容纳刻意对齐的评分表/字典行
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]      # 错误/未用/警告/import 排序
+ignore = ["E402", "E731"]          # 模块级 import 顺序(三语境 fallback 有意延迟)、lambda 赋值(评分模型用)
+
+[tool.mypy]
+ignore_missing_imports = true       # playwright/zoneinfo 等可选依赖不强制
+warn_unused_ignores = false
+disable_error_code = ["no-redef"]   # try/except import fallback 同名重定义是合法模式，非 bug
