@@ -87,4 +87,7 @@
 - 🔄 第六圈（档三·冲 9）进行中：
   - ✅ 本地 CI（`scripts/ci.sh`：pytest + benchmark 自检 + ruff + mypy，代替 GitHub Actions）+ pyproject 加 ruff/mypy 配置；**首跑即抓修 21 个 lint/类型真问题**（f-string/import 排序/分号/no-redef）；三语境 import 复验仍 ok
   - ✅ TLS/JA3 诚实分析（MiMo 深析 + 我裁决 ②：CDP 真 Chrome 页面层 TLS 天然真实、签名 httpx 层缺口属请求层）→ 产出 docs/tls-fingerprint.md（划界 + curl_cffi 指引，不越界接管）
-  - ⬜ 类型注解（核心公共接口，非全量）/ 加固失效监测 / 版本节奏 / 解耦上游
+  - ✅ 版本节奏（v0.5.0 统一 CHANGELOG/pyproject/__init__，修版本错位）
+  - ✅ 加固失效监测（`mirage canary` 离线体检：加固标记/安全参数/stealth/锚点失配 + 退出码；多方 plan 产出，去掉"自动开浏览器"改纯离线 + 指纹层提示手动）
+  - ⬜ 解耦上游（git hook `mirage guard-install`，多方 plan 已出方案、待实现）
+  - ⬜ 核心类型注解（公共接口，非全量）

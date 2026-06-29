@@ -498,6 +498,65 @@ def do_revert(files, root):
 
 
 # ════════════════════════════════════════════════════════════════════
+# canary — 离线失效体检
+# ════════════════════════════════════════════════════════════════════
+def do_canary(files):
+    """离线失效体检：加固是否还在 / 锚点是否失配 / 资源是否健康。
+    全程不发网络、不开浏览器（指纹层 webdriver/BotScore 请手动跑 verify/benchmark）。
+    返回失效项数（0 = 健康）。"""
+    print(_b("\n═══ Canary 失效体检（离线，不发请求）═══"))
+    issues = []
+    core_txt = read(files["core"]) if os.path.isfile(files["core"]) else ""
+    bc_txt = read(files["base_config"]) if os.path.isfile(files["base_config"]) else ""
+
+    # 1) 加固标记还在吗（被上游 pull 覆盖 / 手改会丢）
+    if "L2 jitter" in core_txt and "L4: human warm-up" in core_txt:
+        print(f"  {_g('✓')} core.py 五层加固标记在位")
+    else:
+        issues.append("core.py 加固标记缺失（疑被上游 pull 覆盖）→ 跑 `mirage apply` 重打")
+
+    # 2) base_config 安全参数还是安全值吗
+    bad = [k for k, (v, _) in SAFE_PARAMS.items()
+           if not re.search(rf"^{k}\s*=\s*{re.escape(v)}\b", bc_txt, re.MULTILINE)]
+    if not bad:
+        print(f"  {_g('✓')} base_config 安全参数完好")
+    else:
+        issues.append(f"base_config 安全参数被改回：{', '.join(bad)} → 跑 `mirage apply` 重打")
+
+    # 3) stealth.min.js 健康（存在 + 体积 + 含 webdriver 关键字）
+    sj = files["stealth"]
+    healthy = os.path.isfile(sj) and os.path.getsize(sj) > 1000
+    if healthy:
+        try:
+            with open(sj, "rb") as f:
+                healthy = b"webdriver" in f.read()
+        except OSError:
+            healthy = False
+    if healthy:
+        print(f"  {_g('✓')} stealth.min.js 健康（{os.path.getsize(sj)//1024}KB）")
+    else:
+        issues.append("stealth.min.js 缺失/损坏 → 跑 weekly_maintenance 更新")
+
+    # 4) 上游结构变更检测：'async def search' 锚点是否还在（上游重构会失配）
+    if core_txt:
+        if re.search(r"^    async def search\(self\)", core_txt, re.MULTILINE):
+            print(f"  {_g('✓')} 上游 search 锚点结构未变")
+        else:
+            issues.append("core.py 已无 'async def search(self)' 锚点（上游疑重构）→ 加固锚点可能失配，需人工核对")
+
+    print()
+    if issues:
+        print(_r(f"  ⚠ 发现 {len(issues)} 项失效迹象："))
+        for it in issues:
+            print(f"    - {it}")
+    else:
+        print(_g("  ✓ 离线层加固健康，无失效迹象"))
+    print(_y("  指纹层（webdriver/BotScore）非离线可测，建议定期手动跑："))
+    print(_y("    python scripts/verify_stealth.py   |   python scripts/fingerprint_benchmark.py"))
+    return len(issues)
+
+
+# ════════════════════════════════════════════════════════════════════
 def main(argv=None):
     ap = argparse.ArgumentParser(description="给 MediaCrawler 打入五层反检测加固（多平台）")
     ap.add_argument("path", help="MediaCrawler 安装根目录")
@@ -506,12 +565,20 @@ def main(argv=None):
     ap.add_argument("--dry-run", action="store_true", help="只打印将做的改动，不落盘")
     ap.add_argument("--check", action="store_true", help="体检：报告每层加固状态")
     ap.add_argument("--revert", action="store_true", help="从 .bak 完整还原")
+    ap.add_argument("--canary", action="store_true", help="离线失效体检：加固是否还在/锚点失配/资源健康（不开浏览器）")
     args = ap.parse_args(argv)
 
     root = os.path.abspath(os.path.expanduser(args.path))
     if args.platform != "all" and args.platform not in PLATFORMS:
         sys.exit(_r(f"✗ 未知平台 {args.platform}。可选：{', '.join(PLATFORMS)} 或 all"))
     targets = list(PLATFORMS) if args.platform == "all" else [args.platform]
+
+    if args.canary:
+        total = 0
+        for plat in targets:
+            print(_b(f"\n━━━ Canary {PLATFORMS[plat][1]}({plat}) ━━━"))
+            total += do_canary(locate(root, plat))
+        sys.exit(1 if total else 0)
 
     for plat in targets:
         files = locate(root, plat)

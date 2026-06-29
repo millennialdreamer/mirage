@@ -58,6 +58,9 @@ def main(argv=None):
     sub.add_parser("doctor", help="环境自检")
     sub.add_parser("verify", help="指纹自检（开浏览器，请手动跑）")
     sub.add_parser("benchmark", help="指纹 benchmark 打分（开浏览器，请手动跑）")
+    pc = sub.add_parser("canary", help="离线失效体检（加固是否还在/锚点失配/资源健康）")
+    pc.add_argument("path", help="MediaCrawler 安装根目录")
+    pc.add_argument("--platform", "-p", default="xhs", help="平台 xhs|dy|ks|bili|wb|tieba|zhihu|all")
 
     args = parser.parse_args(argv)
 
@@ -71,6 +74,8 @@ def main(argv=None):
         if args.revert:
             passthru.append("--revert")
         return apply_hardening.main(passthru)
+    if args.cmd == "canary":
+        return apply_hardening.main([args.path, "-p", args.platform, "--canary"])
     if args.cmd == "doctor":
         return _doctor()
     if args.cmd in ("verify", "benchmark"):
