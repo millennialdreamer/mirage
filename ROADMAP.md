@@ -83,4 +83,5 @@
   - ✅ 指纹 benchmark（`fingerprint_benchmark.py`：BotScore 量化 + 风险等级 + JSON 证据报告；国产审采纳 3/5；self-test 过）
   - ✅ 用户动线导航（README 顶部「按你的目的找路」6 入口导航表，不推翻结构、不丢细节）
   - ✅ 打包 pyproject + `mirage` CLI（`package-dir` 映射 scripts **不重命名**→保 skill 结构；`mirage apply/doctor/verify/benchmark`；运行时层三语境 import；国产审采纳 2 条、挡 2 条会砸 skill 的伪建议）
-- ⬜ 第五圈（再评审验收：重新按 10k 标准打分，是否达 ~9/10）
+- ✅ 第五圈（再评审验收）：三方独立复评 **工程 8 / 难反制 8.5 / 产品 7.5 ≈ 8/10**（原 6 → +2）。三方均判"敢放 GitHub / 敢用 / 能活"= 达**可信发布门槛**，但**未到 9**。
+- ⬜ 第六圈（档三·冲 9）：本地 CI + 全量类型注解/mypy（工程闭环，ROI 最高、不依赖浏览器）→ TLS/JA3 指纹（MiMo 标"最该先补"）→ 加固失效监测 → 版本节奏 + 解耦上游
