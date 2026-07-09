@@ -16,6 +16,7 @@
 - `docs/signature-layer.md` + `examples/douyin_signature_bridge.py`：抖音签名四重门（a_bogus/msToken/ttwid/webid）→ 桥接 F2（Apache-2.0）实证模板 + 诚实维护现实
 - `docs/app-capture.md`：App 抓取 2026 真实栈地图（抓包 frida 绕 pinning vs Appium UI 自动化；关键坑"抓包≠搞定、照样撞签名"；Mirage 边界外只给地图）
 - `mirage canary`：离线失效体检（加固标记/安全参数/stealth/锚点失配，退出码语义，不开浏览器）
+- `mirage guard-install` / `guard-uninstall`：给 MediaCrawler 装 git post-merge hook，pull 后提示加固是否被上游覆盖（提示模式、不静默改源码）
 - README 顶部「按你的目的找路」用户动线导航
 
 **Changed / Fixed**

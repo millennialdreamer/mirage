@@ -5,6 +5,8 @@ mirage —— 统一命令行入口。把一堆 `python scripts/xxx.py` 收拢�
 子命令：
   mirage apply <MediaCrawler路径> [-p 平台] [--dry-run|--check|--revert]   打/查/撤 五层加固
   mirage doctor                  环境自检（Python / Playwright / 探测 MediaCrawler）
+  mirage canary <路径>           离线失效体检（加固是否还在/锚点失配/资源健康）
+  mirage guard-install <路径>    装 git hook：pull 后提示加固是否被覆盖
   mirage verify                  指纹自检（开浏览器，请手动跑）
   mirage benchmark               指纹打分（开浏览器，请手动跑）
 
@@ -44,6 +46,61 @@ def _doctor():
         print("  MediaCrawler ? 未在常见位置探测到（apply 时手动指定路径即可）")
 
 
+# —— guard：给 MediaCrawler 的 git 仓库装 post-merge hook，pull 后提示加固是否被覆盖 ——
+# 裁决：默认「提示模式」，只跑只读的 mirage canary + echo 提示，**不静默改第三方源码**（改源码需用户知情）。
+_HOOK_MARK = "# Mirage guard"
+_POST_MERGE_HOOK = '''#!/bin/bash
+# Mirage guard — post-merge hook（由 mirage guard-install 安装）
+# pull/merge 后检查加固是否被上游覆盖；丢了只提示、不自动改源码（改源码需你知情）。
+REPO="$(git rev-parse --show-toplevel)"
+if [ -f "$REPO/config/base_config.py" ] && command -v mirage >/dev/null 2>&1; then
+    if ! mirage canary "$REPO" >/dev/null 2>&1; then
+        echo "[Mirage] 上游 pull 可能覆盖了反检测加固。重打：mirage apply '$REPO'"
+    fi
+fi
+'''
+
+
+def _guard_install(path):
+    """给 MediaCrawler 的 git 仓库装 post-merge hook：pull 后提示加固是否被覆盖（不自动改源码）。"""
+    import shutil
+    import stat
+    root = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isdir(os.path.join(root, ".git")):
+        print(f"✗ {root} 不是 git 仓库（无 .git），无法装 hook")
+        return 1
+    hooks = os.path.join(root, ".git", "hooks")
+    os.makedirs(hooks, exist_ok=True)
+    hook = os.path.join(hooks, "post-merge")
+    if os.path.isfile(hook) and _HOOK_MARK not in open(hook, encoding="utf-8").read():
+        shutil.copy2(hook, hook + ".pre-mirage.bak")
+        print("  已备份原有 post-merge → post-merge.pre-mirage.bak")
+    with open(hook, "w", encoding="utf-8") as f:
+        f.write(_POST_MERGE_HOOK)
+    os.chmod(hook, os.stat(hook).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    print(f"✓ Mirage guard 已装：{hook}")
+    print("  此后该 MediaCrawler 每次 git pull/merge 后，会自动提示加固是否被覆盖。")
+    return 0
+
+
+def _guard_uninstall(path):
+    """卸载 guard hook（有备份则恢复，否则删除）。"""
+    import shutil
+    root = os.path.abspath(os.path.expanduser(path))
+    hook = os.path.join(root, ".git", "hooks", "post-merge")
+    if not os.path.isfile(hook) or _HOOK_MARK not in open(hook, encoding="utf-8").read():
+        print("  未发现 Mirage guard hook")
+        return 0
+    bak = hook + ".pre-mirage.bak"
+    if os.path.isfile(bak):
+        shutil.move(bak, hook)
+        print("✓ 已卸载 Mirage guard，恢复原有 post-merge")
+    else:
+        os.remove(hook)
+        print("✓ 已卸载 Mirage guard")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="mirage", description="Mirage 反检测加固工具集（仅供学习研究）")
     sub = parser.add_subparsers(dest="cmd")
@@ -61,6 +118,10 @@ def main(argv=None):
     pc = sub.add_parser("canary", help="离线失效体检（加固是否还在/锚点失配/资源健康）")
     pc.add_argument("path", help="MediaCrawler 安装根目录")
     pc.add_argument("--platform", "-p", default="xhs", help="平台 xhs|dy|ks|bili|wb|tieba|zhihu|all")
+    pgi = sub.add_parser("guard-install", help="给 MediaCrawler 装 git hook：pull 后提示加固是否被覆盖")
+    pgi.add_argument("path", help="MediaCrawler 安装根目录（git 仓库）")
+    pgu = sub.add_parser("guard-uninstall", help="卸载 guard hook")
+    pgu.add_argument("path", help="MediaCrawler 安装根目录")
 
     args = parser.parse_args(argv)
 
@@ -76,6 +137,10 @@ def main(argv=None):
         return apply_hardening.main(passthru)
     if args.cmd == "canary":
         return apply_hardening.main([args.path, "-p", args.platform, "--canary"])
+    if args.cmd == "guard-install":
+        return _guard_install(args.path)
+    if args.cmd == "guard-uninstall":
+        return _guard_uninstall(args.path)
     if args.cmd == "doctor":
         return _doctor()
     if args.cmd in ("verify", "benchmark"):
@@ -90,4 +155,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())   # 让 guard-install 等靠返回值的子命令退出码生效（None/0→0，1→1）

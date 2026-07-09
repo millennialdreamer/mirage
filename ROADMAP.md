@@ -91,5 +91,5 @@
   - ✅ 加固失效监测（`mirage canary` 离线体检：加固标记/安全参数/stealth/锚点失配 + 退出码；多方 plan 产出，去掉"自动开浏览器"改纯离线 + 指纹层提示手动）
   - ✅ **签名层突破**（boss 端到端撞抖音四重门 → 实证 F2/Apache-2.0 真实 API 全解四门 → `examples/douyin_signature_bridge.py` 可运行桥接模板 + `docs/signature-layer.md` 诚实维护现实；把"档三只指路牌"升级成实证模板，不自己逆向）
   - ✅ **App 抓取地图**（深坑续：`docs/app-capture.md`，2026 实证 抓包(httptoolkit/frida-unpinning) vs UI自动化(Appium3) 两条路 + 关键坑"抓包≠搞定、照样撞签名回 F2" + 军备赛现实；Mirage 边界外，只给地图不接管）
-  - ⬜ 解耦上游（git hook `mirage guard-install`，多方 plan 已出方案、待实现）
+  - ✅ 解耦上游（git hook `mirage guard-install`/`guard-uninstall`：pull 后**提示模式**检测加固被覆盖、不静默改源码；多方 plan 方案 + 我裁决；六项测试 + apply 回归全过，顺带逼出并修掉 `__main__` 吞退出码的真 bug）
   - ⬜ 核心类型注解（公共接口，非全量）
