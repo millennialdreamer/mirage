@@ -24,6 +24,7 @@
 | 扩到抖音 / B站 等别的平台 | 一条 `-p all` 通吃 7 平台 → [docs/platforms.md](docs/platforms.md) |
 | 抖音签名挡住了（a_bogus/msToken/ttwid） | [docs/signature-layer.md](docs/signature-layer.md)：四重门 → 桥接 F2 + [桥接模板](examples/douyin_signature_bridge.py) |
 | 想抓 App（不是网页版） | [docs/app-capture.md](docs/app-capture.md)：抓包 vs UI自动化 两条路 + 维护现实 |
+| 想抓海外（YouTube/X/IG/TikTok） | [docs/overseas.md](docs/overseas.md)：公开 yt-dlp 一把梭 / 账号态看 pacing |
 | 证明加固真有效（出数据） | `python scripts/fingerprint_benchmark.py`：加固前后 BotScore 量化对比 |
 | 弄懂原理（五层怎么防） | [docs/anti-detection.md](docs/anti-detection.md) |
 
