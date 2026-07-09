@@ -14,6 +14,7 @@
 - `scripts/ci.sh`：本地 CI（pytest + ruff + mypy + 自检），代替 GitHub Actions
 - `docs/tls-fingerprint.md`：TLS/JA3 诚实边界分析（CDP 真 Chrome 页面层天然真实）
 - `docs/signature-layer.md` + `examples/douyin_signature_bridge.py`：抖音签名四重门（a_bogus/msToken/ttwid/webid）→ 桥接 F2（Apache-2.0）实证模板 + 诚实维护现实
+- `docs/app-capture.md`：App 抓取 2026 真实栈地图（抓包 frida 绕 pinning vs Appium UI 自动化；关键坑"抓包≠搞定、照样撞签名"；Mirage 边界外只给地图）
 - `mirage canary`：离线失效体检（加固标记/安全参数/stealth/锚点失配，退出码语义，不开浏览器）
 - README 顶部「按你的目的找路」用户动线导航
 

@@ -65,7 +65,7 @@
 
 ### 明确不做（三方共识 · 防无底洞）
 - ❌ 从零逆向抖音 a_bogus/VMP（生命周期常<7天，2026 业界"多数已死"）→ **桥接 F2（Apache-2.0，已解决四重门 a_bogus/msToken/ttwid/webid）** + curl_cffi 补 JA3 + `mirage canary` 监测失效（见 docs/signature-layer.md + examples/douyin_signature_bridge.py）。
-- ❌ App 抓取框架内置（架构膨胀+合规风险）→ 只做《App 抓取避坑指南》+ 指路牌(Spider_XHS/Appium/云手机模板)。
+- ❌ App 抓取框架内置（架构膨胀+合规风险）→ 已写 **docs/app-capture.md**（两条路：抓包 frida 绕 pinning + 回 F2 补签名 / Appium UI 自动化绕签名；2026 活维护栈实证 + 军备赛现实）。
 - ⚠️ 上游死耦合不可能全解 → git hook(pull 前 --revert / pull 后重打) 缓解 + 长线推上游 plugin 接口。
 
 ### 对 v1 ROADMAP 的修正（接受 DeepSeek 批判）
@@ -90,5 +90,6 @@
   - ✅ 版本节奏（v0.5.0 统一 CHANGELOG/pyproject/__init__，修版本错位）
   - ✅ 加固失效监测（`mirage canary` 离线体检：加固标记/安全参数/stealth/锚点失配 + 退出码；多方 plan 产出，去掉"自动开浏览器"改纯离线 + 指纹层提示手动）
   - ✅ **签名层突破**（boss 端到端撞抖音四重门 → 实证 F2/Apache-2.0 真实 API 全解四门 → `examples/douyin_signature_bridge.py` 可运行桥接模板 + `docs/signature-layer.md` 诚实维护现实；把"档三只指路牌"升级成实证模板，不自己逆向）
+  - ✅ **App 抓取地图**（深坑续：`docs/app-capture.md`，2026 实证 抓包(httptoolkit/frida-unpinning) vs UI自动化(Appium3) 两条路 + 关键坑"抓包≠搞定、照样撞签名回 F2" + 军备赛现实；Mirage 边界外，只给地图不接管）
   - ⬜ 解耦上游（git hook `mirage guard-install`，多方 plan 已出方案、待实现）
   - ⬜ 核心类型注解（公共接口，非全量）
