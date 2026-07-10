@@ -93,4 +93,5 @@
   - ✅ **App 抓取地图**（深坑续：`docs/app-capture.md`，2026 实证 抓包(httptoolkit/frida-unpinning) vs UI自动化(Appium3) 两条路 + 关键坑"抓包≠搞定、照样撞签名回 F2" + 军备赛现实；Mirage 边界外，只给地图不接管）
   - ✅ **海外平台地图**（深坑三部曲收官：`docs/overseas.md`，2026 实证两层[公开 yt-dlp 零风险 / 账号态 X·IG·TikTok]；★洞察三坑收敛=curl_cffi 补 TLS + pacing 方法论同源；Mirage 边界外，给指路牌+方法论）
   - ✅ 解耦上游（git hook `mirage guard-install`/`guard-uninstall`：pull 后**提示模式**检测加固被覆盖、不静默改源码；多方 plan 方案 + 我裁决；六项测试 + apply 回归全过，顺带逼出并修掉 `__main__` 吞退出码的真 bug）
-  - ⬜ 核心类型注解（公共接口，非全量）
+  - ✅ 核心类型注解（`interaction_policy.Policy` 数据模型全注解；mypy 逼出 `_counts`/`_last` 缺注解已修；非全量，DeepSeek 说全量被高估）+ `.github/` issue/PR 模板（贴合 Mirage 特性：canary/[xhs-stealth]/write_py_safe/合规）
+- **第六圈档三 8 项全部完成** ✅ —— CI / TLS / 版本 / 失效监测 / 签名层 / App / 海外 / guard / 类型注解 + 模板

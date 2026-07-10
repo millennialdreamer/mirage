@@ -12,10 +12,13 @@ interaction_policy.py — Mirage 互动节奏/配额层（"0 封控"的硬约束
 用户可按自己号的情况调低；绝不建议调高。
 """
 
+from __future__ import annotations
+
 import json
 import os
 import time
 from datetime import date, datetime
+from typing import Optional
 
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -40,9 +43,9 @@ _TIME_SLOTS = {
 
 
 class Policy:
-    def __init__(self, state_path="~/.mirage/interaction_state.json",
-                 limits=None, conservative=False,
-                 platform_tz="Asia/Shanghai"):
+    def __init__(self, state_path: str = "~/.mirage/interaction_state.json",
+                 limits: Optional[dict[str, int]] = None, conservative: bool = False,
+                 platform_tz: str = "Asia/Shanghai") -> None:
         """
         platform_tz — 目标平台所在时区（IANA 名称）。
             默认 "Asia/Shanghai"（小红书等国内平台）。
@@ -53,12 +56,13 @@ class Policy:
         self.limits = dict(limits or DEFAULT_LIMITS)
         if conservative:                         # 新号/冷启动期：上限砍到 1/3
             self.limits = {k: max(1, v // 3) for k, v in self.limits.items()}
-        self._counts, self._last = {}, {}
+        self._counts: dict[str, int] = {}     # action -> 今日次数
+        self._last: dict[str, float] = {}      # action -> 上次时间戳
         self._date = str(date.today())
         self._platform_tz = ZoneInfo(platform_tz)
         self._load()
 
-    def _load(self):
+    def _load(self) -> None:
         try:
             with open(self.path) as f:
                 d = json.load(f)
@@ -68,33 +72,33 @@ class Policy:
         except Exception:
             pass                                 # 不存在/损坏 → 当天从零开始
 
-    def _save(self):
+    def _save(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"date": self._date, "counts": self._counts, "last": self._last}, f)
         os.replace(tmp, self.path)               # 原子写，防中断损坏
 
-    def can(self, action):
+    def can(self, action: str) -> bool:
         """今日未超限 且 距上次该动作已过最小间隔 才允许。"""
         if self._counts.get(action, 0) >= self.limits.get(action, 0):
             return False
         return (time.time() - self._last.get(action, 0)) >= MIN_GAP.get(action, 0)
 
-    def record(self, action):
+    def record(self, action: str) -> None:
         """确认互动生效后才调用：计数 +1、记时间戳、立即持久化。"""
         self._counts[action] = self._counts.get(action, 0) + 1
         self._last[action] = time.time()
         self._save()
 
-    def remaining(self):
+    def remaining(self) -> dict[str, int]:
         return {k: self.limits[k] - self._counts.get(k, 0) for k in self.limits}
 
-    def exhausted(self):
+    def exhausted(self) -> bool:
         """所有动作都到顶了 → loop 该收工。"""
         return all(self._counts.get(k, 0) >= self.limits[k] for k in self.limits)
 
-    def summary(self):
+    def summary(self) -> str:
         return " | ".join(f"{k} {self._counts.get(k,0)}/{self.limits[k]}" for k in self.limits)
 
     # ── 时段感知：判断当前是否适合互动 ──────────────────────────────

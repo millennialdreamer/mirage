@@ -18,6 +18,7 @@
 - `docs/overseas.md`：海外平台 2026 两层地图（公开 yt-dlp / 账号态 X·IG·TikTok 全栽 pacing）+ 三深坑收敛方法论（curl_cffi 补 TLS + pacing 同源）
 - `mirage canary`：离线失效体检（加固标记/安全参数/stealth/锚点失配，退出码语义，不开浏览器）
 - `mirage guard-install` / `guard-uninstall`：给 MediaCrawler 装 git post-merge hook，pull 后提示加固是否被上游覆盖（提示模式、不静默改源码）
+- 核心类型注解（`interaction_policy.Policy` 数据模型）+ `.github/` issue/PR 模板 + `docs/signature-layer.md`·`app-capture.md`·`overseas.md` 三深坑地图
 - README 顶部「按你的目的找路」用户动线导航
 
 **Changed / Fixed**
