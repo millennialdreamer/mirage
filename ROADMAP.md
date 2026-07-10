@@ -105,5 +105,5 @@
 - 三方现在要么**幻觉已做完的东西**（DeepSeek 的 pyproject/测试），要么要**真实世界采用时间**（产品的真实用户/社区/3 个月发布）——**都不是靠写代码还能往上顶的**。
 - 真·剩余差距 = **真实世界时间**（boss 端到端 + 真实用户跑起来 + 数月稳定发布），非代码。
 - **结论：核心代码 loop 完成**（继续刷代码 = 镀金/追幻觉）。
-- ⟳ **但 boss 点出"覆盖度地图"是真漏项**——我只盘了 MediaCrawler 7 + 3 深坑，没自觉盘全市场。已补 `docs/platform-coverage.md`：国内电商(淘宝 mtop/拼多多 anti_content)/本地生活(美团 mtgsig/点评字体加密)/微信生态(公众号活维护栈)/招聘(zp_token)/海外(Reddit PRAW·LinkedIn/Amazon 超边界) 2026 实证矩阵 + 各栈新鲜度诚实标注。方法论收敛不变：找活维护栈桥接 + curl_cffi + pacing。
+- ⟳ **但 boss 点出"覆盖度地图"是真漏项**——我只盘了 MediaCrawler 7 + 3 深坑，没自觉盘全市场。已补 `docs/platform-coverage.md`：国内电商(淘宝 mtop/拼多多 anti_content)/本地生活(美团 mtgsig/点评字体加密)/微信生态(公众号活维护栈)/招聘(zp_token)/海外(Reddit PRAW·LinkedIn/Amazon 超边界) 2026 实证矩阵 + 各栈新鲜度诚实标注。方法论收敛不变。**二次穷尽扩全**（+音乐 musicdl / 长视频 yt-dlp·webvideo-downloader / Telegram Telethon / Reddit PRAW / Google-Yelp curl_cffi / Scrapling 自愈框架）+ `examples/bridges_quickref.py` 给活维护 clean-API 栈写真模板（py_compile + 懒加载验证过）。
 - 唯一剩的对外动作 = **push GitHub（待 boss 拍板）**。

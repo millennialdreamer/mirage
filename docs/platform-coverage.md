@@ -1,40 +1,57 @@
-# 全平台覆盖矩阵（2026 实证）—— Mirage 直接加固什么、其余指向哪
+# 全平台覆盖矩阵（2026 穷尽版）—— 海内外主流全盘
 
-> Mirage 的**行为层加固**只直接管 MediaCrawler 的 7 个平台（小红书/抖音/快手/B站/微博/贴吧/知乎）。
-> 但市面主流远不止这些。这张矩阵把**其余主流平台**也盘清楚：各自的反爬类型、2026 活维护的现成栈、以及 Mirage 与它的关系。
-> **方法论收敛**：不管哪个平台，答案都是同一套——**找到活维护的现成栈桥接它 + curl_cffi 补 TLS + pacing 控节奏**，绝不自己从零逆向。
+> Mirage 的**行为层加固**只直接管 MediaCrawler 的 7 个平台。这张矩阵把**海内外主流全盘一遍**（含长尾），
+> 每个给出：反爬关键、2026 **最新活维护**的现成栈、新鲜度、Mirage 关系。
+> **方法论收敛（再次印证）**：不管哪个平台，答案都是——**找活维护栈桥接 + `curl_cffi` 补 TLS + `pacing` 控节奏**，绝不从零逆向。
+> 可运行桥接模板见 [`examples/bridges_quickref.py`](../examples/bridges_quickref.py)（只给 clean-API 活维护栈；偏旧库不写虚模板）。
 
-## Mirage 与各平台的三种关系
+## 关系三档
+**① 直接加固**（Mirage 五层生效，MediaCrawler 7 平台）｜**② 桥接·指路牌**（有墙、指向活维护栈）｜**③ 超边界**（账号池/App/工作室级）
 
-| 关系 | 含义 | 覆盖谁 |
-|------|------|--------|
-| **① 直接加固** | Mirage 五层行为层加固直接生效 | MediaCrawler 7 平台（xhs/dy/ks/bili/wb/tieba/zhihu）|
-| **② 签名桥接·指路牌** | 有签名墙、Mirage 不接管，指向活维护 crack 栈 | 淘宝/拼多多/美团/知乎签名/boss直聘… |
-| **③ 超边界** | 账号池 / App / 工作室级投入，Mirage 只诚实说清 | LinkedIn/Amazon/FB、App 群控… |
+## 国内
 
-## 覆盖矩阵
+| 类目 | 平台 | 反爬关键 | 2026 现成栈 | 新鲜度 | 关系 |
+|------|------|---------|-------------|--------|------|
+| 内容 | 小红书/抖音/快手/B站/微博/贴吧/知乎 | 行为+签名(x-s/a_bogus/x-zse-96) | MediaCrawler + Mirage 加固 | ✅活 | ① |
+| 电商 | 淘宝/天猫/京东/1688 | mtop + x-sign | [SpiderCrackDemo](https://github.com/xinxianren/SpiderCrackDemo) / [ECommerceCrawlers](https://github.com/DropsDevopsOrg/ECommerceCrawlers) | ⚠️偏旧2022 | ② |
+| 电商 | 拼多多 | anti_content + AccessToken | [banduoba/pinduoduo](https://github.com/banduoba/pinduoduo-1) / [Crack-JS-Spider](https://github.com/LoseNine/Crack-JS-Spider) | ⚠️偏旧 | ② |
+| 电商 | 闲鱼 | 登录态+风控 | [ECommerceCrawlers](https://github.com/DropsDevopsOrg/ECommerceCrawlers) | ⚠️偏旧 | ② |
+| 本地生活 | 美团/外卖 | mtgsig + _token(2次加密) | [SpiderCrackDemo](https://github.com/xinxianren/SpiderCrackDemo) / [xzh0723/MeiTuan](https://github.com/xzh0723/MeiTuan) | ⚠️偏旧·高改版 | ② |
+| 本地生活 | 大众点评 | **CSS字体加密**+坐标 | SpiderCrackDemo + `fontTools` 解 WOFF | 方法稳定 | ② |
+| 音乐 | 网易云/QQ/酷狗/酷我/咪咕 | 加密url+版权 | [musicdl](https://github.com/CharlesPikachu/musicdl)(数十平台) / [go-music-dl](https://github.com/guohuiyuan/go-music-dl) | ✅活维护 | ② |
+| 长视频 | 爱奇艺/腾讯/优酷/芒果 | m3u8+加密 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) / [webvideo-downloader](https://github.com/jaysonlong/webvideo-downloader) | ✅活维护 | ② |
+| 资讯 | 今日头条/搜狐 | 签名+风控 | [ECommerceCrawlers](https://github.com/DropsDevopsOrg/ECommerceCrawlers) / [crawlProject](https://github.com/xishandong/crawlProject) | ⚠️偏旧 | ② |
+| 社区/影音 | 豆瓣 | 限流+风控 | ECommerceCrawlers | ⚠️偏旧 | ② |
+| 招聘 | boss直聘/拉勾 | zp_token | [Crack-JS-Spider](https://github.com/LoseNine/Crack-JS-Spider) | ⚠️偏旧 | ② |
+| 微信生态 | 公众号/视频号/文章 | 登录态+风控 | [wechat-article-exporter](https://github.com/wechat-article/wechat-article-exporter) / [wechat-download-api](https://github.com/tmwgsicp/wechat-download-api) | ✅活维护·最省心 | ② |
+| 地图/本地 | 高德/百度地图 | 签名+配额 | **官方开放平台 API**（优先）/ Just One API | ✅官方 | ② |
 
-| 类目 | 平台 | 反爬关键 | 2026 现成栈（桥接对象） | 新鲜度 | Mirage 关系 |
-|------|------|---------|------------------------|--------|-------------|
-| 国内内容 | 小红书/抖音/快手/B站/微博/贴吧/知乎 | 行为+签名(x-s/a_bogus/x-zse-96) | MediaCrawler 本体 + Mirage 加固 | 活 | **① 直接加固** |
-| 国内电商 | 淘宝/天猫/京东/1688 | `mtop` 接口 + `x-sign` | [SpiderCrackDemo](https://github.com/xinxianren/SpiderCrackDemo) / [ECommerceCrawlers](https://github.com/DropsDevopsOrg/ECommerceCrawlers) | ⚠️ 偏旧(部分2022) | ② 桥接 |
-| 国内电商 | 拼多多 | `anti_content`(Get_c/i/s/u) + AccessToken | [banduoba/pinduoduo](https://github.com/banduoba/pinduoduo-1) / [Crack-JS-Spider](https://github.com/LoseNine/Crack-JS-Spider) | ⚠️ 偏旧 | ② 桥接 |
-| 本地生活 | 美团/美团外卖 | `mtgsig` + `_token`(2次加密+gzip) | [SpiderCrackDemo](https://github.com/xinxianren/SpiderCrackDemo) / [xzh0723/MeiTuan](https://github.com/xzh0723/MeiTuan) | ⚠️ 偏旧·高改版 | ② 桥接 |
-| 本地生活 | 大众点评 | **CSS 字体加密** + 坐标加密 | SpiderCrackDemo + `fontTools` 解 WOFF 字体映射 | 方法稳定 | ② 桥接 |
-| 招聘 | boss直聘/拉勾 | `zp_token` | [Crack-JS-Spider](https://github.com/LoseNine/Crack-JS-Spider) | ⚠️ 偏旧 | ② 桥接 |
-| 微信生态 | 公众号/文章/阅读量 | 登录态 + 风控 | [wechat-article-exporter](https://github.com/wechat-article/wechat-article-exporter)(在线/docker) / [wechat-download-api](https://github.com/tmwgsicp/wechat-download-api)(RSS+IP池) / [striver-ing/wechat-spider](https://github.com/striver-ing/wechat-spider) | ✅ 活维护 | ② 桥接·直接用 |
-| 海外内容 | YouTube/X/IG/TikTok | 见 [overseas.md](overseas.md) | yt-dlp / twscrape / instaloader / TikTok-Api | ✅/⚠️ | ② 见海外篇 |
-| 海外社交 | Reddit | OAuth + 限流(100/min) | [PRAW](https://github.com/praw-dev/praw) 官方 API wrapper | ✅ 活维护(2026) | ② 桥接·官方 API |
-| 海外社交/电商 | LinkedIn/Amazon/Facebook | 强认证 + 账号封锁 | 账号池 + 商用 scraping API（Proxyway 测 11 家仅 4 家 >80% 成功率） | 难 | **③ 超边界** |
-| App（任意） | 抖音/小红书 App 等 | SSL pinning + 签名 | 见 [app-capture.md](app-capture.md)（frida/Appium） | —— | **③ 超边界** |
+## 海外
 
-## 诚实提醒（别被"有现成库"骗了）
+| 类目 | 平台 | 反爬关键 | 2026 现成栈 | 新鲜度 | 关系 |
+|------|------|---------|-------------|--------|------|
+| 视频 | YouTube + 1800 站 | —— | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | ✅日更 | ② 一把梭 |
+| 社交 | X / IG / TikTok | 见 [overseas.md](overseas.md) | twscrape / [instagrapi](https://github.com/subzeroid/instagrapi) / TikTok-Api | ✅/⚠️ | ② |
+| 论坛 | Reddit | OAuth+限流100/min | [PRAW](https://github.com/praw-dev/praw) 官方 | ✅活维护 | ② 官方API |
+| IM | Telegram | MTProto | [Telethon](https://github.com/LonamiWebs/Telethon) 官方 | ✅活维护 | ② 官方库 |
+| 图集 | Pinterest | 登录态 | [gallery-dl](https://github.com/mikf/gallery-dl) + topic repos | ✅活 | ② |
+| 新社交 | Threads(Meta) | 背景请求签名 | Playwright + 背景请求捕获（[Scrapfly 法](https://scrapfly.io/blog/posts/how-to-scrape-threads)），无 clean lib | ⚠️需自写 | ②/③ |
+| 地图评价 | Google Maps/Yelp | DataDome/Cloudflare | [google-reviews-scraper-pro](https://github.com/georgekhananaev/google-reviews-scraper-pro) / SeleniumBase CDP + **curl_cffi** | ✅活维护 | ② |
+| 电商 | Amazon reviews | 风控+验证码 | bs4 脚本(脆) / 商用 API | ⚠️脆 | ②/③ |
+| 职业 | LinkedIn | 强认证+封号 | 账号池 + 商用 API（11 家仅 4 家>80%） | 🔴 | ③ 超边界 |
+| 短内容 | Snapchat/Quora | 强风控 | 弱维护/无稳定开源 | 🔴 | ③ 超边界 |
+| App（任意） | 各家 App | SSL pinning+签名 | 见 [app-capture.md](app-capture.md)（frida/Appium） | —— | ③ 超边界 |
 
-1. **国内电商/本地生活的 crack 库普遍偏旧**（部分参数停在 2022），远不如 F2/yt-dlp/PRAW 活跃。淘宝 `x-sign`、美团 `mtgsig` 改版极快——**这些库是"参考起点"不是"保证可用"**，用前先看 commit 日期、找更新的 fork，或准备自己维护。
-2. **微信公众号栈最省心**（多个活维护、甚至在线/docker 开箱即用），是这批里最容易的。
-3. **大众点评的 CSS 字体加密**方法稳定（fontTools 解字体映射），不随参数改版天天变，值得优先。
-4. **LinkedIn/Amazon/Facebook 是超边界**——2026 商用 scraping API 都只有 4/11 家能过 80%，别指望开源单兵搞定，要么账号池要么买 API。
+## 2026 值得知道的通用武器
+- **[Scrapling](https://github.com/D4Vinci/Scrapling)**（25k★ 崛起）：自愈式自适应解析 + 反爬绕过 + AI，页面结构变了能自适应，适合长尾平台省维护。
+- **curl_cffi**：贯穿签名层/海外/Google-Yelp 的 TLS 伪装底座（`impersonate="chrome"`），一招通用。
+- **snscrape**：多平台社交，但 **X 支持 2023 后基本挂**，慎用；X 现用 twscrape。
+
+## 诚实提醒（别被"有库"骗）
+1. **国内电商/本地生活/招聘 crack 库普遍偏旧**（部分停 2022），远不如 yt-dlp/musicdl/PRAW/Telethon 活跃——是"参考起点"，用前看 commit 日期、找新 fork，或准备自维护。淘宝/美团改版极快。
+2. **最省心的几类**：长视频/音乐（yt-dlp/musicdl）、微信公众号（wechat-article-exporter）、Reddit（PRAW）、Telegram（Telethon）——都活维护、API 干净。
+3. **地图优先走官方开放平台 API**（高德/百度/Google），别硬爬。
+4. **LinkedIn/Snapchat/Quora/Amazon 深度 = 超边界**，2026 商用 API 都只 4/11 家过 80%，别指望开源单兵。
 
 ## 一句话
-
-**市面主流全盘一遍，答案还是那套：MediaCrawler 7 平台 Mirage 直接加固；其余带签名墙的（电商/本地生活/招聘/微信/知乎）桥接活维护 crack 栈（注意国内电商库偏旧、要自备维护）；LinkedIn/Amazon/App 群控是超边界。不自逆、找现成栈、curl_cffi 补 TLS、pacing 控节奏——一套通解。**
+**海内外主流全盘：MediaCrawler 7 平台 Mirage 直接加固；音乐/长视频/微信/Reddit/Telegram 有活维护 clean 栈直接桥接；电商/本地生活/招聘桥接偏旧 crack 库（自备维护）；LinkedIn/App 群控超边界。curl_cffi 补 TLS + pacing + 找活维护栈——一套通解全平台。**

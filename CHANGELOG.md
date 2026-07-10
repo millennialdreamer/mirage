@@ -16,7 +16,8 @@
 - `docs/signature-layer.md` + `examples/douyin_signature_bridge.py`：抖音签名四重门（a_bogus/msToken/ttwid/webid）→ 桥接 F2（Apache-2.0）实证模板 + 诚实维护现实
 - `docs/app-capture.md`：App 抓取 2026 真实栈地图（抓包 frida 绕 pinning vs Appium UI 自动化；关键坑"抓包≠搞定、照样撞签名"；Mirage 边界外只给地图）
 - `docs/overseas.md`：海外平台 2026 两层地图（公开 yt-dlp / 账号态 X·IG·TikTok 全栽 pacing）+ 三深坑收敛方法论（curl_cffi 补 TLS + pacing 同源）
-- `docs/platform-coverage.md`：全平台覆盖矩阵（国内电商/本地生活/微信/招聘/海外 主流平台 2026 反爬 + 活维护栈 + Mirage 三种关系；各栈新鲜度诚实标注）
+- `docs/platform-coverage.md`：全平台覆盖矩阵**穷尽版**（海内外主流全盘：内容/电商/本地生活/音乐/长视频/资讯/招聘/微信/地图 + 海外 视频/社交/论坛/IM/图集/地图评价/职业；2026 最新活维护栈 + 新鲜度诚实标注 + Scrapling/curl_cffi 通用武器）
+- `examples/bridges_quickref.py`：活维护 clean-API 栈最小正确桥接模板（yt-dlp/PRAW/Telethon/instagrapi，偏旧 crack 库不写虚模板）
 - `mirage canary`：离线失效体检（加固标记/安全参数/stealth/锚点失配，退出码语义，不开浏览器）
 - `mirage guard-install` / `guard-uninstall`：给 MediaCrawler 装 git post-merge hook，pull 后提示加固是否被上游覆盖（提示模式、不静默改源码）
 - 核心类型注解（`interaction_policy.Policy` 数据模型）+ `.github/` issue/PR 模板 + `docs/signature-layer.md`·`app-capture.md`·`overseas.md` 三深坑地图
