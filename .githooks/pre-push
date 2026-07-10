@@ -1,0 +1,5 @@
+#!/bin/bash
+# Mirage 开发用 pre-push hook：push 前自动跑本地 CI（代替额度禁用的 GitHub Actions）。
+# 启用一次：  git config core.hooksPath .githooks
+# 之后每次 git push 前自动跑 pytest + ruff + mypy + benchmark 自检，红了就拦下不让 push。
+exec bash "$(git rev-parse --show-toplevel)/scripts/ci.sh"

@@ -28,6 +28,18 @@ except ImportError:
         from mirage.human_interaction import XhsInteractor
         from mirage.interaction_policy import Policy
 
+try:
+    from _logging import get_logger  # 库模块日志（别裸 print）
+except ImportError:                               # 部署/包语境兜底：退化成标准库 logger
+    import logging as _logging_mod
+
+    def get_logger(name: str = "mirage.loop"):
+        _logging_mod.basicConfig(level=_logging_mod.INFO,
+                                 format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        return _logging_mod.getLogger(name)
+
+log = get_logger("mirage.loop")
+
 # 风控信号：用**完整短语**（笔记正文几乎不会出现），优先在弹窗里查，大幅降低误判。
 # 反例：单个"验证码"三字可能出现在笔记正文里 → 会误熔断，所以不用单词。
 DANGER_PHRASES = ["操作过于频繁", "操作太频繁", "频繁操作请", "完成安全验证",
@@ -115,22 +127,22 @@ class MirageLoop:
         return acted
 
     async def run(self):
-        print(f"=== Mirage 刷号循环启动 ({'DRY-RUN 演示' if self.dry_run else '真实互动'}) ===")
+        log.info(f"=== Mirage 刷号循环启动 ({'DRY-RUN 演示' if self.dry_run else '真实互动'}) ===")
         if not self.dry_run:
-            print("⚠ 真实互动模式：会真的给人点赞/关注。确认用的是小号！")
+            log.warning("真实互动模式：会真的给人点赞/关注。确认用的是小号！")
         await warmup()
         start = time.time()
         rounds = 0
         while True:
             # —— 熔断：最高优先级 ——
             if await self._danger():
-                print("🛑 检测到风控信号（验证码/限流/异常），立即停止")
+                log.warning("检测到风控信号（验证码/限流/异常），立即停止")
                 break
             if self.policy.exhausted():
-                print("✓ 今日互动预算全部用尽，收工")
+                log.info("今日互动预算全部用尽，收工")
                 break
             if time.time() - start > self.max_seconds:
-                print("✓ 到达运行时长上限，收工")
+                log.info("到达运行时长上限，收工")
                 break
 
             # —— 时段感知：深夜直接歇 ——
@@ -138,7 +150,7 @@ class MirageLoop:
             if slot_mult == 0.0:
                 # 深夜（平台时间 2~6 点），真人极少，暂停一段再检查
                 slot = self.policy.current_slot()
-                print(f"  ⏸ 当前平台时段【{slot}】，不适合互动，暂停 600s 后再检查…")
+                log.info(f"当前平台时段【{slot}】，不适合互动，暂停 600s 后再检查")
                 await asyncio.sleep(600)   # 10 分钟后重新判断时段
                 continue
 
@@ -160,13 +172,13 @@ class MirageLoop:
                 await human_sleep(4.0, 0.7, 1.6)    # 互动/浏览之间的自然间隔
 
             rounds += 1
-            print(f"  第 {rounds} 轮完成 | 时段[{self.policy.current_slot()}×{slot_mult:.1f}] | 今日 {self.policy.summary()}")
+            log.info(f"第 {rounds} 轮完成 | 时段[{self.policy.current_slot()}×{slot_mult:.1f}] | 今日 {self.policy.summary()}")
             await human_sleep(6.0, 0.7, 1.5)        # 轮间停顿
 
             # —— 偶尔"走神"长停（真人会分心去做别的）——
             if random.random() < 0.15:
                 pause = random.uniform(20, 90)
-                print(f"  （走神 {pause:.0f}s…）")
+                log.debug(f"走神 {pause:.0f}s")
                 await asyncio.sleep(pause)
 
-        print(f"=== 结束：共 {rounds} 轮，今日 {self.policy.summary()} ===")
+        log.info(f"=== 结束：共 {rounds} 轮，今日 {self.policy.summary()} ===")

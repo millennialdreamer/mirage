@@ -29,11 +29,9 @@ else
     echo "  ⚠ 未装 ruff，跳过 → pip install ruff"
 fi
 
-step "mypy（类型检查 · 仅核心模块）"
+step "mypy（类型检查 · 全 scripts）"
 if command -v mypy >/dev/null 2>&1; then
-    mypy "$ROOT/scripts/apply_hardening.py" "$ROOT/scripts/cli.py" \
-         "$ROOT/scripts/interaction_policy.py" "$ROOT/scripts/fingerprint_benchmark.py" \
-         --ignore-missing-imports || fail=1
+    mypy "$ROOT/scripts" --ignore-missing-imports || fail=1
 else
     echo "  ⚠ 未装 mypy，跳过 → pip install mypy"
 fi
