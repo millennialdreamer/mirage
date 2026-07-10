@@ -14,28 +14,35 @@ from __future__ import annotations
 
 
 def youtube_or_cnvideo(url: str) -> dict:
-    """长视频（YouTube/爱奇艺/腾讯/优酷/B站…1800 站）：yt-dlp 一把梭，公开内容零账号风险。"""
+    """长视频：yt-dlp 一把梭，公开内容零账号风险。
+    ⚠️ extract_info 可能返回 None/抛异常，要 try；部分站(B站等)需传 cookies；
+       优酷/芒果 TV 有 DRM、yt-dlp 支持差——主要是 YouTube/爱奇艺/腾讯部分可用，别过度指望国产长视频。"""
     import yt_dlp
     with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
         return ydl.extract_info(url, download=False)      # 只取元数据；download=True 才下
 
 
 def reddit_hot(subreddit: str, client_id: str, client_secret: str, ua: str, limit: int = 10):
-    """Reddit：官方 API wrapper PRAW（需注册 app 拿 client_id/secret，限流 100/min）。"""
+    """Reddit：官方 API wrapper PRAW。只传 id/secret/ua = read-only 模式，读公开 subreddit 够用。
+    ⚠️ 需先去 reddit.com/prefs/apps 注册 script app；2026 起未登录调用限速更严，备好指数退避。"""
     import praw
     reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=ua)
     return [(p.title, p.score, p.url) for p in reddit.subreddit(subreddit).hot(limit=limit)]
 
 
 async def telegram_channel_messages(channel: str, api_id: int, api_hash: str, limit: int = 100):
-    """Telegram：官方 MTProto 库 Telethon（api_id/api_hash 从 my.telegram.org 拿）。异步。"""
+    """Telegram：官方 MTProto 库 Telethon（api_id/api_hash 从 my.telegram.org 拿）。异步。
+    ⚠️ 首次运行会卡在交互式登录(要手机号+验证码)——**先手动跑一次**生成 mirage_session.session，
+       之后才能自动化。别指望这段在无人值守下直接跑通。"""
     from telethon import TelegramClient
     async with TelegramClient("mirage_session", api_id, api_hash) as client:
         return [m.text async for m in client.iter_messages(channel, limit=limit)]
 
 
 def instagram_user_medias(username: str, login_user: str, login_pw: str, amount: int = 20):
-    """Instagram：instagrapi（private API，活维护到 2026；只用小号、低频，封号风险自负）。"""
+    """Instagram：instagrapi（private API，活维护 2026-07 仍发版；只用小号、低频）。
+    ⚠️ **必须** cl.dump_settings()/load_settings() 持久化登录态——频繁 login 必触发 challenge(验证码/邮件)甚至封号；
+       生产要配 cl.challenge_code_handler。这是最小示例，别裸用。"""
     from instagrapi import Client
     cl = Client()
     cl.login(login_user, login_pw)                        # 建议配合 session 持久化，别每次登
