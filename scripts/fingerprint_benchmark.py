@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-fingerprint_benchmark.py — 可证明的拟人：给"加固前 vs 加固后"的浏览器指纹打分，
-产出可存档、可对比、可写进 README 的**证据报告**，把"我说像人"变成"数据说像人"。
+fingerprint_benchmark.py — 加固前/后浏览器指纹的**相对基准分**（不是"证据"，看清下面的诚实边界）。
 
-定位：verify_stealth.py 是"自检（特征在不在）"；本脚本是"benchmark（有多像人 + 出分 + 存档）"。
+⚠️ 诚实边界（红队多方审后修正，别再吹"可证明"）：
+   1. 本分只测 **7 个基础信号**（webdriver/plugins/UA/languages/webgl-renderer/window/chrome），
+      **在 about:blank 上测** —— Canvas/WebGL 像素指纹、字体枚举、CDP `Runtime.Enable` 泄漏、
+      JA3 传输层等**深层维度全都没测**。低分只说明"挡住了低端现成检测"，≠ 真能骗过平台风控。
+   2. `--self-test` 用的是 **MOCK 硬编指纹**，只验证"评分逻辑对不对"，**不是真实证据**。
+   3. 加固的 L1 靠 `stealth.min.js`，那是 **2023-03 停更版**，只挡 off-the-shelf 检测。
+   → 想要**真实证据**：用 `--detect-url` 打开真检测页(默认 bot.sannysoft.com)亲眼看，或去 CreepJS/BrowserScan。
 
-⚠️ 真实跑分会启动浏览器 —— 请 boss **自己手动跑**，AI 不代跑（与 verify_stealth 同一铁律）。
-   评分逻辑无需浏览器即可自测：  python fingerprint_benchmark.py --self-test
+定位：verify_stealth.py 快速自检；本脚本给相对基准分 + 通往真实检测页的入口。真跑请 boss 手动，AI 不代跑。
 
 用法：
-    python fingerprint_benchmark.py --stealth ../libs/stealth.min.js      # 手动跑真分（开窗口）
-    python fingerprint_benchmark.py --stealth ../libs/stealth.min.js --headless
-    python fingerprint_benchmark.py --self-test                            # 只测评分逻辑(无浏览器)
+    python fingerprint_benchmark.py --self-test                        # 只测评分逻辑(MOCK,无浏览器,非证据)
+    python fingerprint_benchmark.py --stealth ../libs/stealth.min.js   # 加固前后 7 信号相对基准(开窗口)
+    python fingerprint_benchmark.py --detect-url                       # ⭐去真实检测页亲眼看(真实证据入口)
 
-依赖：playwright（仅真跑分需要；--self-test 不需要）
-
-BotScore：0~100，越高越像机器人。加固应把分数显著拉低；报告记录降幅作为证据。
+依赖：playwright（仅真跑需要；--self-test 不需要）。BotScore 0~100，越高越像机器人（仅 7 基础信号相对分）。
 """
 import argparse
 import asyncio
@@ -87,8 +89,10 @@ def risk_level(botscore):
     return "低" if botscore <= 20 else ("中" if botscore <= 50 else "高")
 
 
-DISCLAIMER = ("本 BotScore 仅覆盖 7 个基础指纹维度，是相对基准分，不等于真实平台风控判定"
-              "（真实维度更多、逻辑更复杂）；stealth 后现实预期约 5~30 分，0 分是理想化结果。")
+DISCLAIMER = ("本 BotScore 只测 7 个基础信号、在 about:blank 上跑，是相对基准分，**不是真实证据**——"
+              "Canvas/WebGL 像素、字体枚举、CDP Runtime.Enable 泄漏、JA3 等深层全没测；"
+              "低分只说明挡住了低端现成检测。stealth.min.js 为 2023-03 停更版。"
+              "真实证据请用 --detect-url 去真检测页(CreepJS/BrowserScan)亲眼看。")
 
 
 def render_report(fp_plain, fp_stealth):
@@ -109,7 +113,7 @@ def render_report(fp_plain, fp_stealth):
     block("实验组 · 已加固", fp_stealth, bs_s, hits_s)
 
     drop = bs_p - bs_s
-    print("\n═══ 结论（证据）═══")
+    print("\n═══ 结论（7 信号相对基准，非真实证据）═══")
     print(f"  BotScore：{bs_p} → {bs_s}  （降低 {drop} 分，越低越像真人）")
     print(f"  风险等级：对照组【{risk_level(bs_p)}】→ 实验组【{risk_level(bs_s)}】")
     if drop >= 40:
@@ -187,21 +191,58 @@ def self_test():
     less = dict(MOCK_PLAIN)
     less["webdriver"] = False
     assert score_fingerprint(less)[0] < bs_p, "去掉 webdriver 后分应下降"
-    print("\n🎉 self-test 通过：评分单调、裸高加固低、改善显著、报告结构完整")
+    print("\n🎉 self-test 通过：评分逻辑对（单调 / 裸高加固低 / 报告结构完整）。")
+    print("⚠ 但这是 MOCK 硬编指纹，只验证评分逻辑——**不是真实证据**。真证据用 --detect-url 去真检测页。")
+
+
+async def _run_detect(url, stealth_path, headless):
+    """打开真实检测页(注入 stealth)，在真页面上采 7 信号 + 全页截图作为真实证据入口。"""
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        sys.exit("✗ 未安装 playwright。先跑：pip install playwright && playwright install chromium")
+    shot = os.path.expanduser(f"~/.mirage/detect_{int(time.time())}.png")
+    os.makedirs(os.path.dirname(shot), exist_ok=True)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=headless)
+        ctx = await browser.new_context()
+        if stealth_path:
+            await ctx.add_init_script(path=stealth_path)
+        page = await ctx.new_page()
+        await page.goto(url, wait_until="networkidle")
+        await page.screenshot(path=shot, full_page=True)
+        fp = await page.evaluate(EXTENDED_CHECK_JS)
+        if not headless:
+            await page.wait_for_timeout(6000)   # 留时间让你亲眼看
+        await browser.close()
+    bs, _ = score_fingerprint(fp)
+    print(f"\n  真检测页 7 信号 BotScore={bs}（webglRenderer={fp.get('webglRenderer')}）")
+    print(f"  ⭐ 真正的证据看这张全页截图：{shot}")
+    print("     里面 Canvas/WebGL/字体/自动化痕迹等深层判定，才是平台真会看的，不是这 7 分。")
+    print(f"  ⚠ {DISCLAIMER}")
+    return fp
 
 
 def main():
-    ap = argparse.ArgumentParser(description="指纹 benchmark：加固前后 BotScore 对比（真跑请手动）")
+    ap = argparse.ArgumentParser(description="指纹相对基准分 + 真实检测页入口（真跑请手动；分数非证据）")
     here = os.path.dirname(os.path.abspath(__file__))
     default_stealth = os.path.normpath(os.path.join(here, "..", "libs", "stealth.min.js"))
     ap.add_argument("--stealth", default=default_stealth, help="stealth.min.js 路径")
     ap.add_argument("--headless", action="store_true", help="无头运行（默认开窗口便于亲眼看）")
     ap.add_argument("--self-test", action="store_true", help="只测评分逻辑，不启动浏览器")
-    ap.add_argument("--json", default="", help="把证据报告写到指定 JSON 路径")
+    ap.add_argument("--json", default="", help="把相对基准报告写到指定 JSON 路径")
+    ap.add_argument("--detect-url", nargs="?", const="https://bot.sannysoft.com/", default="",
+                    help="⭐去真实检测页亲眼看(默认 bot.sannysoft.com)——比 7 信号相对分更接近真实证据")
     args = ap.parse_args()
 
     if args.self_test:
         self_test()
+        return
+
+    if args.detect_url:
+        sp = args.stealth if os.path.isfile(args.stealth) else None
+        print(f"打开真实检测页 {args.detect_url}（stealth={'注入' if sp else '无'}）……亲眼看窗口结果")
+        asyncio.run(_run_detect(args.detect_url, sp, args.headless))
         return
 
     stealth_path = args.stealth if os.path.isfile(args.stealth) else None
@@ -219,7 +260,7 @@ def main():
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
-        print(f"\n  证据报告已存：{out_path}")
+        print(f"\n  相对基准报告已存：{out_path}（记住：7 信号相对分，非真实证据）")
     except Exception as e:
         print(f"\n  ⚠ 报告写盘失败（{e}），分数仍见上方")
 
