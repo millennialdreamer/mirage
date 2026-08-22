@@ -6,6 +6,7 @@ mirage —— 统一命令行入口。把一堆 `python scripts/xxx.py` 收拢�
   mirage apply <MediaCrawler路径> [-p 平台] [--dry-run|--check|--revert]   打/查/撤 五层加固
   mirage doctor                  环境自检（Python / Playwright / 探测 MediaCrawler）
   mirage canary <路径>           离线失效体检（加固是否还在/锚点失配/资源健康）
+  mirage radar                   ⭐软封杀预警：从趋势看出"正在被降权"（被封之前）
   mirage guard-install <路径>    装 git hook：pull 后提示加固是否被覆盖
   mirage verify                  指纹自检（开浏览器，请手动跑）
   mirage benchmark               指纹打分（开浏览器，请手动跑）
@@ -66,6 +67,30 @@ if [ -f "$REPO/config/base_config.py" ] && command -v mirage >/dev/null 2>&1; th
     fi
 fi
 '''
+
+
+def _radar(account, do_reset):
+    """软封杀预警面板：看趋势判断当前是否正在被降权。"""
+    try:
+        from soft_ban_radar import SoftBanRadar
+    except ImportError:
+        from mirage.soft_ban_radar import SoftBanRadar
+    radar = SoftBanRadar(account=account)
+    if do_reset:
+        radar.reset()
+        print(f"✓ 已清空账号「{account}」的基线（换号/换 IP 后旧基线不再适用）")
+        return 0
+    v = radar.assess()
+    icon = {"正常": "✓", "观察": "·", "警戒": "⚠", "危险": "🛑", "数据不足": "?"}.get(v.level, "·")
+    print(f"\n{icon} 软封杀雷达 · 账号「{account}」")
+    print(f"  等级：{v.level}   风险分：{v.score}/100   观测样本：{v.samples}")
+    if v.signals:
+        print("  信号：")
+        for k, val in v.signals.items():
+            print(f"    {k}: {val}")
+    print(f"  建议：{v.advice}")
+    print("\n  ⚠ 这是趋势启发式判断，不是精确判定；它不替代风控熔断，两者都要有。")
+    return 0
 
 
 def _guard_install(path):
@@ -129,6 +154,9 @@ def main(argv=None):
     pgi.add_argument("path", help="MediaCrawler 安装根目录（git 仓库）")
     pgu = sub.add_parser("guard-uninstall", help="卸载 guard hook")
     pgu.add_argument("path", help="MediaCrawler 安装根目录")
+    pr = sub.add_parser("radar", help="软封杀预警：看当前是否正在被降权（趋势判断）")
+    pr.add_argument("--account", default="default", help="账号标识（不同账号分别建基线）")
+    pr.add_argument("--reset", action="store_true", help="清空该账号基线（换号/换 IP 后用）")
 
     args = parser.parse_args(argv)
 
@@ -144,6 +172,8 @@ def main(argv=None):
         return apply_hardening.main(passthru)
     if args.cmd == "canary":
         return apply_hardening.main([args.path, "-p", args.platform, "--canary"])
+    if args.cmd == "radar":
+        return _radar(args.account, args.reset)
     if args.cmd == "guard-install":
         return _guard_install(args.path)
     if args.cmd == "guard-uninstall":

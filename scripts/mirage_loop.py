@@ -40,6 +40,17 @@ except ImportError:                               # 部署/包语境兜底：退
 
 log = get_logger("mirage.loop")
 
+try:                                              # 软封杀雷达（可选：缺失则降级为不预警）
+    from soft_ban_radar import SoftBanRadar
+except ImportError:
+    try:
+        from tools.soft_ban_radar import SoftBanRadar
+    except ImportError:
+        try:
+            from mirage.soft_ban_radar import SoftBanRadar
+        except ImportError:
+            SoftBanRadar = None
+
 # 风控信号：用**完整短语**（笔记正文几乎不会出现），优先在弹窗里查，大幅降低误判。
 # 反例：单个"验证码"三字可能出现在笔记正文里 → 会误熔断，所以不用单词。
 DANGER_PHRASES = ["操作过于频繁", "操作太频繁", "频繁操作请", "完成安全验证",
@@ -63,6 +74,9 @@ class MirageLoop:
         self.interact_prob = interact_prob          # 看到一条笔记→互动的概率（多数只看）
         self.max_seconds = max_minutes * 60
         self.dry_run = dry_run
+        # 软封杀雷达：_danger() 是"已经弹验证码了"的急刹，雷达是它的**前置预警**
+        # （从趋势看出正在被降权，在被封之前就降速）。两者是"预警"和"急刹"的关系。
+        self.radar = SoftBanRadar() if SoftBanRadar else None
 
     async def _danger(self):
         """检测风控信号。先看弹窗(最准)，再退到整页完整短语匹配。熔断优先级最高。"""
@@ -136,6 +150,8 @@ class MirageLoop:
         while True:
             # —— 熔断：最高优先级 ——
             if await self._danger():
+                if self.radar:
+                    self.radar.observe(ok=False, captcha=True)   # 喂给雷达，供下次判趋势
                 log.warning("检测到风控信号（验证码/限流/异常），立即停止")
                 break
             if self.policy.exhausted():
@@ -173,7 +189,22 @@ class MirageLoop:
 
             rounds += 1
             log.info(f"第 {rounds} 轮完成 | 时段[{self.policy.current_slot()}×{slot_mult:.1f}] | 今日 {self.policy.summary()}")
-            await human_sleep(6.0, 0.7, 1.5)        # 轮间停顿
+
+            # —— 软封杀预警：在"被封"之前就看出正在被降权 ——
+            slow_factor = 1.0
+            if self.radar:
+                self.radar.observe(ok=True)         # 本轮跑完没撞风控
+                v = self.radar.assess()
+                if v.should_stop():
+                    log.warning(f"软封杀雷达 {v.level}({v.score}/100)：{v.advice}")
+                    break
+                if v.should_slow_down():
+                    slow_factor = 2.0 if v.level == "警戒" else 1.5
+                    log.warning(f"软封杀雷达 {v.level}({v.score}/100) → 本轮起降速 ×{slow_factor}；{v.advice}")
+                elif rounds % 5 == 0:
+                    log.info(self.radar.summary())
+
+            await human_sleep(6.0 * slow_factor, 0.7, 1.5)   # 轮间停顿（雷达报警时自动拉长）
 
             # —— 偶尔"走神"长停（真人会分心去做别的）——
             if random.random() < 0.15:
