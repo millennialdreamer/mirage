@@ -1,40 +1,40 @@
-# 使用政策与伦理边界
+# Usage Policy and Ethical Boundaries
 
-Mirage 是一套**反检测加固工具 + 安全方法论**，不是刷量 / 黑产工具。本文件划清它的用途边界——既是对使用者的约束，也是这个项目能在开源社区长期存活的前提。
+Mirage is a suite of **anti-detection hardening tools + security methodology**, not a traffic-farming / black-market tool. This document defines its usage boundaries—both as constraints on users and as the precondition for this project's long-term survival in the open-source community.
 
-## ✅ 适用范围
+## ✅ Allowed Use
 
-- 学习爬虫反检测、风控对抗的**技术原理**
-- 对**自己的小号**做合规的抓取 / 互动**测试**
-- 学术研究、安全研究、个人项目的数据采集（在平台条款允许范围内）
+- Learning the **technical principles** of crawler anti-detection and risk-control evasion
+- Running compliant scraping / interaction **tests** on **your own alt accounts**
+- Academic research, security research, and personal-project data collection (within the scope allowed by platform terms)
 
-## ❌ 明确禁止
+## ❌ Explicitly Prohibited
 
-- **商业刷量 / 刷粉 / 刷赞 / 控评**——Mirage 的互动引擎是「拟人克制辅助」，不是批量营销机
-- **操作主号 / 生产账号 / 他人账号**——只用可弃的小号
-- **破解验证码 / 绕过登录鉴权**——遇验证码立即停手，绝不对抗人机验证
-- **批量养号卖号、矩阵号商业化**
-- **任何违反目标平台服务条款、当地法律的用途**
+- **Commercial traffic farming / follower farming / like farming / comment manipulation**—Mirage's interaction engine is a "human-like restraint assistant", not a bulk marketing machine
+- **Operating main accounts / production accounts / other people's accounts**—use only disposable alt accounts
+- **Breaking CAPTCHAs / bypassing login authentication**—stop immediately when encountering a CAPTCHA, never fight human verification
+- **Bulk account warming/selling, commercializing account matrices**
+- **Any use that violates the target platform's terms of service or local laws**
 
-## 🛡️ 工具内置的护栏（默认就帮你守住底线）
+## 🛡️ Built-in Guardrails (Safe by Default)
 
-| 护栏 | 说明 |
+| Guardrail | Description |
 |------|------|
-| `dry_run` 默认开 | 互动引擎默认只演示不真点，必须显式 `dry_run=False` 才真互动 |
-| 保守配额 + 最小间隔 | 每日上限比真人手动还保守，杜绝秒赞 / 超量 |
-| 遇风控自动熔断 | 检测到验证码 / 限流 / 异常立即停止，不绕过、不硬刚 |
-| AI 绝不替你实跑 | 互动有真实对外后果，必须由你本人在小号上发起 |
+| `dry_run` on by default | The interaction engine only demonstrates and does not actually click by default; you must explicitly set `dry_run=False` for real interactions |
+| Conservative quotas + minimum intervals | Daily caps are more conservative than manual human behavior, eliminating instant likes / overuse |
+| Automatic circuit breaker on risk control | Immediately stops when CAPTCHA / rate limiting / anomalies are detected; no bypassing, no forcing through |
+| AI never runs it for you | Interactions have real external consequences and must be initiated by you personally on an alt account |
 
-## ⚖️ 使用者责任
+## ⚖️ User Responsibility
 
-- 抓取数据的**合法性**、对**平台条款与 robots 规则**的遵守，由使用者自负
-- 合理控制频率，尊重目标平台与其他用户
-- 因使用本工具产生的一切后果由使用者承担
+- The **legality** of scraped data and compliance with **platform terms and robots rules** are the user's own responsibility
+- Control frequency reasonably, respect the target platform and other users
+- All consequences arising from use of this tool are borne by the user
 
-## 为什么这么克制？
+## Why So Restrained?
 
-行为层「拟人」的本质是**尊重平台、像真人一样温和地使用**，而不是攻击。越克制，越可持续——既是对平台的尊重，也是对你账号的保护。把工具用在学习与研究上，它能长期帮到你；用来刷量黑产，迟早封号、也会让这个项目被举报下架。
+The essence of "human-like" behavior at the behavior layer is **respecting the platform and using it gently, like a real person**, not attacking. The more restrained you are, the more sustainable it is—both respect for the platform and protection for your account. Use the tool for learning and research, and it can help you for a long time; use it for traffic farming or black-market operations, and sooner or later the account gets banned, and this project will be reported and taken down.
 
 ---
 
-> 简言之：Mirage 帮你的自动化「更像人、更温和」，不帮你「更快地薅」。请善用。
+> In short: Mirage helps your automation be "more human and gentler", not help you "farm faster". Please use it well.

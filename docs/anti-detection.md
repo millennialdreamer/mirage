@@ -1,75 +1,61 @@
-# 反检测原理
+# Anti-Detection Principles
 
-Mirage 不是一套新爬虫，而是一组专门为 MediaCrawler 设计的行为加固层——它通过修改 JS 指纹、打乱时序、模拟人类操作等方式，显著降低被小红书风控系统识别的概率。
+Mirage is not a new crawler, but a set of behavioral hardening layers specifically designed for MediaCrawler—it significantly reduces the probability of being identified by Xiaohongshu's risk control system by modifying JS fingerprints, disrupting timing, and simulating human actions.
 
-## 风控在检测什么
+## What Risk Control Detects
 
-小红书的风控体系不是单一规则，而是一个多信号融合的线上模型。它会同时观察三类特征：
+Xiaohongshu's risk control is not a single rule, but an online model that fuses multiple signals. It simultaneously observes three categories of features:
 
-1. **浏览器指纹异常**：通过 JavaScript 暴露的 `navigator.webdriver`、`navigator.plugins`、`window.chrome`、`navigator.permissions` 等属性检查当前环境是否被自动化工具控制。典型特征包括 `webdriver` 为 `true`、插件列表为空、`chrome` 对象缺失、权限查询行为与正常浏览器不一致等。
-2. **时序与节拍特征**：人类操作天然带有不规则间隔，而脚本/机器人在无对抗时通常表现为"每 N 秒一次请求"的固定节拍。统计模型很容易捕获这种周期性。
-3. **页面交互行为**：鼠标是否移动、滚动是否发生、搜索是否在页面加载后瞬时触发等，都是强信号。完全静止的等待窗口与真人浏览行为相去甚远。
+1. **Browser fingerprint anomalies**: via JavaScript-exposed properties such as `navigator.webdriver`, `navigator.plugins`, `window.chrome`, `navigator.permissions`, it checks whether the current environment is controlled by automation tools. Typical signs include `webdriver` being `true`, empty plugin list, missing `chrome` object, permission query behavior inconsistent with normal browsers, etc.
+2. **Timing and cadence features**: Human actions naturally have irregular intervals, while unmodified scripts/bots usually show a fixed cadence of "one request every N seconds." Statistical models can easily capture such periodicity.
+3. **Page interaction behavior**: whether the mouse moves, whether scrolling occurs, whether search is triggered instantly after page load—these are strong signals. A completely still waiting window is very different from real human browsing.
 
-风控系统本质上是在计算"这个会话有多像机器人"。mirage 的设计思路，就是逐层擦除上述信号，让会话在模型眼中尽可能落在"像人"的分布内。
+Risk control systems essentially calculate "how bot-like is this session." Mirage's design approach is to erase these signals layer by layer, so that in the model's eyes the session falls as much as possible into the "human-like" distribution.
 
-## 五层防护逐层拆解
+## Five Layers of Protection
 
-### L1：stealth.min.js 注入 – 修正自动化指纹
+### L1: stealth.min.js injection – correcting automation fingerprints
 
-小红书页面会动态加载 JavaScript 检测环境。最直接的机器人标记是 `navigator.webdriver === true`，这是 Chrome 在 DevTools 协议控制下自动设置的属性。此外，脚本还会检查 `navigator.plugins` 长度（正常浏览器会包含 PDF Viewer 等内置插件）、`window.chrome` 对象是否存在，以及 `navigator.permissions.query` 的返回值模式。
+Xiaohongshu pages dynamically load JavaScript to inspect the environment. The most direct bot marker is `navigator.webdriver === true`, a property Chrome automatically sets when controlled via the DevTools protocol. Scripts also check the length of `navigator.plugins` (normal browsers include built-in plugins such as PDF Viewer), whether `window.chrome` exists, and the return pattern of `navigator.permissions.query`.
 
-`stealth.min.js`（来自 `puppeteer-extra-plugin-stealth`）通过一系列在新文档创建时注入的初始化脚本，在这些属性被页面读取前就将其覆盖为正常浏览器的值。本工具在通过 CDP（Chrome DevTools Protocol）启动浏览器时自动执行该注入，确保每一帧页面在 JavaScript 看来都是一个"普通人类打开的真实 Chrome"。
+`stealth.min.js` (from `puppeteer-extra-plugin-stealth`) injects initialization scripts when a new document is created, overwriting these properties with normal browser values before the page reads them. This tool executes that injection automatically when launching the browser over CDP (Chrome DevTools Protocol), ensuring every frame appears to JavaScript as a "real Chrome opened by a normal human."
 
-### L2：随机抖动睡眠 – 消除固定节拍
+### L2: random jitter sleep – removing fixed cadence
 
-爬虫最常见的破绽不是"太慢"或"太快"，而是"太规律"。如果每次请求之间的 `sleep` 都是精确的 6 秒，请求间隔的直方图会呈现一个锐利的峰，立刻暴露自动化痕迹。
+The most common tell of a crawler is not "too slow" or "too fast," but "too regular." If the `sleep` between requests is always exactly 6 seconds, the histogram of request intervals shows a sharp peak that immediately exposes automation.
 
-本工具将所有固定的等待睡眠替换为 `random.uniform(base*0.7, base*1.6)` 的随机采样。例如当基础间隔 `base=6` 秒时，实际每次等待时间会在 4.2 秒到 9.6 秒之间浮动。这个范围既保留了足够的延迟以模拟真人阅读时间，又通过随机化消除了可被统计模型识别的节拍。
+This tool replaces every fixed sleep with a sample from a **log-normal** distribution:
+`base * random.lognormvariate(0, 0.45)`. With `base=6s` the median stays at 6s, most waits land
+between 4 and 9 seconds, and a long tail occasionally stretches into the teens.
 
-### L3：批次限制 + 安全参数 – 压低并发与单次行为量
+The distribution matters more than the range. Human inter-action times are **right-skewed** — many
+short gaps, a few long ones (you got distracted, you actually read something). `random.uniform`
+produces a **flat-topped rectangle**, which a Kolmogorov–Smirnov test separates from human behavior
+immediately. Measured skewness: `uniform` ≈ **-0.01** (flat), log-normal ≈ **+1.43** (human-shaped).
 
-即便是单次合法操作，过大的数量和并发也会被风控视为"批量采集"。本工具强制将单次抓取上限从 15 条降为 8 条，让单次行为规模更接近普通用户的浏览习惯。
+### L3: batch limits + safety parameters – reducing concurrency and per-action volume
 
-同时，工具锁定三项关键参数确保运行环境更像真人：
-- `ENABLE_CDP_MODE=True`：使用 CDP 协议控制一个真实的 Chrome 浏览器，而不是 Playwright 默认携带的 Chromium 编译版本。真实 Chrome 的行为特征、二进制签名和网络栈更能通过环境检测。
-- `HEADLESS=False`：关闭无头模式。无头浏览器在渲染、字体度量、WebGL 等方面的特征与有界面版本差异巨大，是极易被识别的信号。
-- `MAX_CONCURRENCY_NUM=1`：单并发。同时只有一个请求在进行，与真人一次只做一件事的行为模式一致。
+Even for a single legitimate action, excessive volume and concurrency are treated by risk control as "batch collection." This tool forces the per-crawl limit down from 15 to 8 items, making single-action scale closer to ordinary user browsing habits.
 
-### L4：启动预热 – 模拟"先看后搜"
+At the same time, it locks three key parameters to make the runtime environment more human-like:
+- `ENABLE_CDP_MODE=True`: use the CDP protocol to control a real Chrome browser, rather than the Chromium build bundled with Playwright. Real Chrome's behavioral characteristics, binary signatures, and network stack pass environment checks better.
+- `HEADLESS=False`: disable headless mode. Headless browsers differ greatly from headed versions in rendering, font metrics, WebGL, and are an easily detectable signal.
+- `MAX_CONCURRENCY_NUM=1`: single concurrency. Only one request is in flight at a time, consistent with a real human doing one thing at a time.
 
-真人从打开页面到开始搜索之间，总会有一个阅读或扫视的时间。机器人则经常是页面完成加载的瞬间就发出搜索请求，这种"零延迟交互"是极强的自动化特征。
+### L4: startup warm-up – simulating "look before searching"
 
-本工具在首次搜索动作前，插入 `random.uniform(3,8)` 秒的预热停顿。对平台而言这 3~8 秒的空白期是"浏览行为"的强暗示，能有效压低风控模型对自动化行为的评分。
+A real human always spends some time reading or scanning between opening a page and starting to search. Bots often send a search request the instant the page finishes loading; this "zero-latency interaction" is a very strong automation feature.
 
-### L5：鼠标 + 滚动模拟 – 证明"人在操作"
+This tool inserts a warm-up pause before the first search — again log-normal rather than uniform,
+centred around 5.5s and clamped to 2.5–16s. To the platform, that quiet window before the first query
+reads as browsing behavior and lowers the session's automation score.
 
-风控系统会追踪页面停留期间是否有合理的交互事件。如果爬虫在两次请求之间只是执行 `sleep`，页面上没有任何鼠标移动、点击或滚动，风控可以断定这是一个无人操控的会话。
+### L5: mouse + scroll simulation – proving "a human is operating"
 
-本工具在翻页间隔中，使用 Playwright 的 `mouse.wheel` 进行滚动，并通过 `mouse.move` 将鼠标移动到 2~4 个随机坐标，同时约有 40% 的概率再往回滚动一点。这些动作不产生有意义的业务请求，但对风控模型来说，它们意味着"用户仍在物理操作设备"，使会话的行为多了一层人类特有的随机性。
+Risk control systems track whether reasonable interaction events occur during page dwell time. If a crawler only executes `sleep` between requests, with no mouse movement, clicks, or scrolling, risk control can conclude this is an unattended session.
 
-## 为什么不接代理池
+Between page turns, this tool uses Playwright's `mouse.wheel` to scroll and `mouse.move` to move the mouse to 2–4 random coordinates, with about a 40% probability of scrolling back a little. These actions do not generate meaningful business requests, but to the risk control model they mean "the user is still physically operating the device," adding a layer of human-specific randomness to the session's behavior.
 
-很多人会直觉地认为"换 IP 就能解决反爬"，但在小红书这种强账户体系、强设备指纹的平台，IP 质量的影响远大于 IP 数量。住宅 IP 通常比机房代理 IP 干净得多，但如果接入的代理池中包含大量已被风控系统标记过的 IP（例如历史上与批量注册、恶意爬取关联过的地址），反而会立刻升高会话的风险评分。
+## Why Not Use a Proxy Pool
 
-此外，本工具采用应用级代理，即仅在需要时由 `playwright` 发出的请求携带 proxy 配置，而不修改操作系统的全局网络设置。这种设计避免了对用户其他网络活动产生影响，也降低了系统级代理链路特征被检测的风险。
-
-## 已知未覆盖的检测维度
-
-诚实地说，本工具聚焦"行为层"加固，以下维度**没有覆盖**——它们要么需要更深的改造，要么会显著干扰爬取流程。了解这些边界，才能合理预期：
-
-- **Canvas / AudioContext 指纹噪声**：stealth.min.js 修正了 WebGL vendor 等，但不给 canvas/audio 指纹加随机噪声。同一设备的 canvas hash 始终一致，可被设备指纹体系关联。
-- **完整的点击事件链**：本工具只滚动 + 移动鼠标，不自动点击笔记卡片（点击会触发跳转、干扰抓取逻辑）。真实用户有"悬停→点击→返回"的决策链，纯只读会话在行为图谱上偏异常。`human_behavior.py` 提供了安全的 `human_hover`（悬停不跳转）供手动集成时补这一环。
-- **TLS / JA3 与 HTTP/2 指纹**：CDP 控制的真实 Chrome 本身这些指纹正常，但**一旦经过中间人代理**，代理的 TLS 终结可能让 JA3 与 ClientHello 不一致——这也是本工具默认不接代理的原因之一。
-- **账号级行为序列**：风控会看一个账号长期是否只有"搜索→抓取"这种机器人模板，缺少点赞/收藏/关注等社交动作。这属于账号养号策略，超出爬虫工具范畴。
-- **鼠标轨迹的语义性**：本工具的贝塞尔移动目标是随机坐标；真实用户的鼠标会移向有意义的元素（卡片、图片）。已是合理近似，但非完美。
-- **CDP `Runtime.Enable` 泄漏** → ✅ **已有解法（2026-07 更新，纠正此前判断）**：DataDome 2024 公开的检测——Playwright/Puppeteer 启动时自动调 CDP `Runtime.Enable`，留下可被 JS 侦测的痕迹，`stealth.min.js` 这类**注入脚本原理上补不了**（页面里的 JS 改不了驱动怎么发 CDP 命令）。此前本文写"属驱动层改造、超出定位"是**判断错误**：[`patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python) 是 Playwright 的 **drop-in 替换**（同 API，`pip install patchright` + 改 import 即可），它把 evaluate 全走 isolated context 从而避开 `Runtime.Enable`，还顺带禁掉 `Console.enable` 泄漏、修正 `--enable-automation` 等命令行标志——**不重编译浏览器，仍在本工具定位内**。`mirage doctor` 会检测并提示。
-- **`stealth.min.js` 已被上游 deprecated（2025-02）** 🔴：本工具 L1 用的 puppeteer-extra-stealth，上游已停止维护。更要命的是它的**随机 canvas 噪声**原理在 2026 已反成指纹信号——检测方（Castle/GeeTest 等）在同一页面跑两遍相同绘制比对 hash，真机恒定、而它每次随机 → **不一致本身即判定为伪造**。正解是"种子化确定性噪声"（同 profile 跨会话稳定），本工具尚未实现。**结论：L1 目前只挡低端现成检测，且部分特征已过时；优先级最高的升级是换 patchright。**
-- **benchmark 分数的性质**：`fingerprint_benchmark.py` 的 7 信号 BotScore 是**自打的相对分，非证据**。真实判定请用 `--detect-url`（解析 bot.sannysoft.com 真实通过率 + 全页截图）或 `--botd`（FingerprintJS 开源 BotD 第三方确定性判定）。⚠️ CreepJS 的 trust score 已在 2026 被官方打码禁用，读不到了，别信任何"能读 CreepJS 分数"的说法。
-
-**结论**：本工具能把你从"明显的机器人"降到"低活跃的真人"，足以应对多数中小规模抓取；但面对小红书最严格的风控，它是必要的"入场券"而非"隐身衣"。想更进一步，需要在账号养号、设备指纹、完整交互链上做更重的工程——那超出了一个"一键加固脚本"的定位。
-
-## 局限与诚实声明
-
-反检测的本质不是消除风险，而是降低被识别概率，而且这是一场持续对抗。风控模型每隔几周就会升级，行为特征的权重和检测阈值都会变化；同时，请求签名算法（如常见的 `x-s` 参数）是最容易失效的部分，一旦平台更新签名生成逻辑，仅凭行为层加固无法保证通过。
-
-需要特别说明的是，行为层加固（如随机睡眠、鼠标模拟）比签名层加固更稳定，因为人类行为的分布很难被简单规则穷举，而签名算法则是完全确定性的逆向工程。本工具的立脚点就是在稳定性更高的行为层上做文章，让爬虫足够"像人"，而不是追求一套一劳永逸的完美伪装。
+Many people intuitively think "changing IP solves anti-crawling," but

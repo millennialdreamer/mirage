@@ -1,14 +1,14 @@
 ---
-name: 功能建议
-about: 想要的能力 / 改进
+name: Feature request
+about: Desired capability / improvement
 title: "[feat] "
 labels: enhancement
 ---
 
-**想解决的问题**：
+**Problem to solve**:
 
-**期望的方案**：
+**Proposed solution**:
 
-**边界确认**（勾一下，避免超范围——Mirage 只做网页版行为层加固）：
-- [ ] 属于「网页版行为层加固 / 互动 / CLI」（Mirage 范围内）
-- [ ] 属于签名 / App / 海外（请先读 `docs/signature-layer.md`、`docs/app-capture.md`、`docs/overseas.md`，多为边界外，Mirage 只给指路牌）
+**Scope confirmation** (check to avoid overreach—Mirage only does web behavior-layer hardening):
+- [ ] Belongs to "web behavior-layer hardening / interaction / CLI" (within Mirage scope)
+- [ ] Belongs to signature / App / overseas (please read `docs/signature-layer.md`, `docs/app-capture.md`, `docs/overseas.md` first—mostly out of scope, Mirage only provides signposts)

@@ -1,37 +1,37 @@
-# examples/ 使用示例
+# examples/ Usage Examples
 
-## 文件说明
+## File description
 
-| 文件 | 说明 |
+| File | Description |
 |------|------|
-| `harden_all.sh` | 演示 `apply_hardening.py` 的常用调用方式（Mac/Linux） |
+| `harden_all.sh` | Demonstrates common invocations of `apply_hardening.py` (Mac/Linux) |
 
-## 快速上手
+## Quick start
 
-### 第一步：确认 MediaCrawler 已安装
+### Step 1: Verify MediaCrawler is installed
 
 ```bash
-ls /path/to/MediaCrawler/config/base_config.py  # 应该存在
+ls /path/to/MediaCrawler/config/base_config.py  # should exist
 ```
 
-### 第二步：dry-run 预览改动
+### Step 2: Preview changes with dry-run
 
 ```bash
 python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run
 ```
 
-### 第三步：正式打补丁
+### Step 3: Apply patches
 
 ```bash
 python scripts/apply_hardening.py /path/to/MediaCrawler
 ```
 
-### Windows 用户的等价命令
+### Equivalent commands for Windows users
 
-把 `harden_all.sh` 里的每条 `python scripts/apply_hardening.py ...` 原样在 PowerShell 或 CMD 里执行即可，路径用正斜杠或反斜杠均可。
+Run each `python scripts/apply_hardening.py ...` line from `harden_all.sh` as-is in PowerShell or CMD; paths can use either forward slashes or backslashes.
 
-## 更多说明
+## More information
 
-- 跨平台差异：见 `docs/cross-platform.md`
-- 五层加固原理：见 `docs/anti-detection.md`
-- 互动引擎用法：见 `SKILL.md`
+- Cross-platform differences: see `docs/cross-platform.md`
+- Five-layer hardening principles: see `docs/anti-detection.md`
+- Interaction engine usage: see `SKILL.md`

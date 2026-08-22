@@ -1,15 +1,24 @@
-Mirage — 学习与研究用途许可 (Non-Commercial Learning License)
+Mirage — Non-Commercial Research License
 
 Copyright (c) 2026 millennialdreamer
 
-本项目仅供学习、研究与技术交流使用。使用本项目即表示您同意以下条款：
+This project is provided for learning, research and technical study only.
+By using it, you agree to the following:
 
-1. 不得用于任何商业用途。
-2. 使用时须遵守目标平台（包括但不限于小红书）的使用条款与 robots.txt 规则。
-3. 不得进行大规模爬取，或对目标平台的正常运营造成干扰。
-4. 应合理控制请求频率，避免给目标平台带来不必要的负担。
-5. 不得用于任何非法或不当用途。
+1. No commercial use of any kind.
+2. You are responsible for complying with the terms of service and robots.txt
+   of any platform you point it at. Note that most platforms' terms already
+   prohibit automated access — this license does not override that, and using
+   this software does not make such access permitted.
+3. No large-scale scraping, and nothing that interferes with the normal
+   operation of a target platform.
+4. Keep request rates reasonable. Do not impose unnecessary load on anyone.
+5. No illegal or otherwise improper use.
 
-本项目是面向 NanmiCoder/MediaCrawler 的反检测加固工具，继承其非商用学习精神。
-本项目按"原样"提供，不附带任何明示或暗示的担保。因使用本项目所产生的一切
-后果（包括但不限于账号被风控、限流、封禁）由使用者自行承担，作者不负任何责任。
+Mirage is an anti-detection hardening toolkit for NanmiCoder/MediaCrawler and
+inherits the same non-commercial, study-oriented spirit.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. ALL CONSEQUENCES OF USE — INCLUDING BUT NOT LIMITED TO ACCOUNT
+RESTRICTION, RATE LIMITING, OR PERMANENT BANS — ARE BORNE ENTIRELY BY THE USER.
+THE AUTHOR ACCEPTS NO LIABILITY.

@@ -1,34 +1,34 @@
-# 安全使用指南
+# Safe Usage Guide
 
-这份指南写给想抓点小红书数据、又怕账号被盯上的你。记住一句话：**爬虫永远有风险，加固只是降低概率，不是免死金牌。** 下面这几条，请照做。
+This guide is for you if you want to scrape some Xiaohongshu data and are worried about your account being flagged. Remember one thing: **crawling is always risky; hardening only lowers the probability, it is not a get-out-of-jail-free card.** Follow the rules below.
 
-## 头号铁律：只用小号，主号永不碰爬虫
+## Rule number one: only use an alt account, never let your main account touch the crawler
 
-任何爬虫操作，绝对不要用你日常发笔记、聊天、买东西的主号。爬虫的行为再像人，也总有破绽，一旦主号被风控标记，粉丝、笔记、绑定的手机号都可能跟着遭殃。
+For any crawler operation, absolutely never use the main account you use daily for posting notes, chatting, and shopping. No matter how human-like the crawler's behavior is, there will always be gaps. Once the main account is flagged by risk control, followers, notes, and the bound phone number may all suffer.
 
-**正确做法**：注册一个全新的、和主号没有任何关联的小号，专门拿来跑爬虫。没粉丝、没笔记都无所谓，被干掉也不心疼。换 IP、换设备都救不了主号——平台是综合账号、设备指纹、行为规律一起判的。
+**Correct approach**: Register a brand-new alt account with no connection to your main account, dedicated to running the crawler. It doesn't matter if it has no followers or notes; if it gets killed you won't feel bad. Changing IP or device won't save your main account — platforms judge based on a combination of account, device fingerprint, and behavior patterns.
 
-## 放量循序渐进，别一上来就猛抓
+## Scale up gradually; don't hammer it from the start
 
-小红书的限流是**累计触发**的，不是一次性的。请求量要像新手健身一样慢慢加：
+Xiaohongshu's rate limiting is **cumulative**, not one-shot. Increase request volume slowly, like a beginner at the gym:
 
-- **第一天**：总共 **不超过 30 条**。目的是验证能跑通，不是测极限。
-- **第二天**：**不超过 100 条**。顺便观察小号状态（能不能正常发笔记、评论有没有被折叠）。
-- **第三天以后**：可以再加，但**绝不连续猛抓**。抓一批，停下来隔几个小时，再抓下一批。
+- **Day one**: **no more than 30 items** total. The goal is to verify the pipeline works, not to test the limit.
+- **Day two**: **no more than 100 items**. While at it, observe the alt account's status — can it post notes normally? are comments collapsed?
+- **Day three onwards**: you can increase further, but **never hammer continuously**. Crawl a batch, stop for a few hours, then crawl the next batch.
 
-真人不会几个小时连轴刷别人主页。"慢 + 间断"才像人。
+A real person won't continuously browse other people's profiles for hours. "Slow + intermittent" is what looks human.
 
-## 三个速率档位：默认永远用 safe
+## Three rate tiers: always use safe by default
 
-工具内置三档，一条命令切换。**平时永远用 `safe`，除非你真不在乎这个号死活。**
+The tool has three built-in tiers, switchable with a single command. **Always use `safe` normally, unless you really don't care whether this account lives or dies.**
 
-| 档位 | 单次条数 | 基础间隔 | 何时用 |
+| Tier | Batch size | Base interval | When to use |
 |------|---------|---------|--------|
-| **safe** | ≤8 条 | 6s（实际抖动 4.2~9.6s） | **默认**，求稳 |
-| normal | 15 条 | 3s（抖动 2.1~4.8s） | 时间赶、风险自担 |
-| fast | 30 条 | 1s + 3 并发 | **危险**，只在"豁出去冲一把"时用 |
+| **safe** | ≤8 items | 6s (actual jitter 4.2–9.6s) | **Default**, for stability |
+| normal | 15 items | 3s (jitter 2.1–4.8s) | Time-crunched, risk is on you |
+| fast | 30 items | 1s + 3 concurrent | **Dangerous**, only when you're "going all in" |
 
-切档命令（在 MediaCrawler 目录下）：
+Switch tier commands (under the MediaCrawler directory):
 
 ```bash
 python config/safe_profile.py            # 看当前档 + 预估速率
@@ -36,45 +36,45 @@ python config/safe_profile.py safe       # 切到安全档
 python config/safe_profile.py normal     # 切到常规档
 ```
 
-> 注意：别同时开多个爬虫窗口跑——速率会叠加，等于偷偷切到了 fast。
+> Note: don't run multiple crawler windows at the same time — the rates add up, which is equivalent to secretly switching to fast.
 
-## 加固不是万能，要有心理准备
+## Hardening is not a silver bullet; be mentally prepared
 
-五层加固能让你的请求"更像真人"，但**没有任何工具能保证 100% 不被发现**。小红书风控每隔几周就升级。如果你抓得太猛、或长时间死盯一个用户，照样会起疑。加固是盾牌，但请求量太大这把"砍刀"太钝，盾牌也顶不住。
+The five layers of hardening can make your requests "more human-like", but **no tool can guarantee 100% detection avoidance**. Xiaohongshu's risk control upgrades every few weeks. If you crawl too hard, or stare at a single user for too long, it will still get suspicious. Hardening is a shield, but if the request volume "machete" is too heavy, the shield won't hold.
 
-## 被警告了怎么办？立即停手
+## What to do if you get warned? Stop immediately
 
-如果小号收到"操作异常""行为受限"提示，或抓回来的数据突然全空/乱码——**立刻停掉所有爬虫，当天别再跑**。然后：
+If the alt account receives "abnormal operation" or "behavior restricted" warnings, or the crawled data suddenly comes back empty/garbled — **stop all crawlers immediately, and don't run them again that day**. Then:
 
-1. **停手休息**，关掉所有爬虫窗口。
-2. **切到 safe 档**，并把单次量再调小：编辑 `config/base_config.py` 把 `CRAWLER_MAX_NOTES_COUNT` 改到 **≤3**。越少越安全。
-3. **确认用的是小号**。如果手滑用了主号，立即停用，以后永不在主号跑。
-4. **检查加固还在不在**：跑 `python apply_hardening.py <你的MediaCrawler路径> --check`，确认五层没被覆盖掉。
+1. **Stop and rest**; close all crawler windows.
+2. **Switch to safe tier**, and reduce the batch size further: edit `config/base_config.py` and change `CRAWLER_MAX_NOTES_COUNT` to **≤3**. Fewer is safer.
+3. **Make sure you're using an alt account**. If you slipped and used your main account, stop immediately and never run on your main account again.
+4. **Check whether hardening is still in place**: run `python apply_hardening.py <your-MediaCrawler-path> --check` to confirm the five layers haven't been overwritten.
 
-如果第二天小号恢复正常，说明只是轻度警告；要是反复被抓，这号可能被永久标记了，换个新小号。
+If the alt account returns to normal the next day, it was only a mild warning. If it gets caught repeatedly, the account may have been permanently flagged — switch to a new alt account.
 
-## 上游更新会冲掉加固
+## Upstream updates will wipe out the hardening
 
-本工具是给 `MediaCrawler` 打补丁。如果你 `git pull` 更新了 MediaCrawler，**你的加固会被覆盖**。正确顺序：
+This tool patches `MediaCrawler`. If you `git pull` updates to MediaCrawler, **your hardening will be overwritten**. The correct order:
 
-1. 更新前先还原：`python apply_hardening.py <路径> --revert`
-2. 再 `git pull`
-3. 拉完重新打补丁：`python apply_hardening.py <路径>`
-4. 体检确认：`python apply_hardening.py <路径> --check`
+1. Revert before updating: `python apply_hardening.py <path> --revert`
+2. Then `git pull`
+3. After pulling, re-apply the patch: `python apply_hardening.py <path>`
+4. Run a health check to confirm: `python apply_hardening.py <path> --check`
 
-嫌麻烦的话，至少每次 pull 后跑一次 `--check`，确认五层还在。
+If that's too much trouble, at least run `--check` after each pull to confirm the five layers are still in place.
 
-## 用真实 Chrome + 复用已登录账号最安全
+## Using real Chrome + reusing a logged-in account is safest
 
-本工具默认开启 CDP 模式（`ENABLE_CDP_MODE=True` + `CDP_CONNECT_EXISTING=True`）：它直接接管你**已经打开、已经登录小号**的真实 Chrome，而不是每次新开一个全自动浏览器。
+This tool enables CDP mode by default (`ENABLE_CDP_MODE=True` + `CDP_CONNECT_EXISTING=True`): it directly takes over your already-open, already-logged-in real Chrome with the alt account, instead of launching a fully automated browser from scratch each time.
 
-为什么更安全：
+Why this is safer:
 
-- 真实 Chrome 的指纹（分辨率、字体、显卡）和普通用户一模一样，不会被当成"自动化工具"。
-- 复用已登录会话，省掉每次登录的验证码、滑块——这些验证环节本身也是风控观察点。
+- The fingerprint of real Chrome (resolution, fonts, GPU) is identical to a normal user's, so it won't be treated as an "automation tool".
+- Reusing a logged-in session avoids captchas and slider verifications on each login — those verification steps are themselves risk-control observation points.
 
-做法：先在你的 Chrome 里手动登录好小号，保持窗口开着，再启动爬虫，它会自动接管。
+How to do it: first log in to your alt account manually in Chrome, keep the window open, then start the crawler — it will take over automatically.
 
 ---
 
-**最后一句**：小红书不是给你随便爬的，被抓是常态。这工具只适合拿小号做点技术练习和小规模数据实验，别用来搞商业采集或大规模抓取——那是比封号严重得多的法律风险。保护好自己。
+**One last thing**: Xiaohongshu is not yours to crawl freely, and getting caught is normal. This tool is only suitable for doing some technical practice and small-scale data experiments with an alt account. Don't use it for commercial collection or large-scale scraping — that is a legal risk far more serious than a ban. Protect yourself.

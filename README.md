@@ -1,152 +1,242 @@
-# Mirage 幻影 · 多平台爬虫反检测加固
+<h1 align="center">Mirage</h1>
 
-<sub>**Mirage** —— 让风控看见的，只是一个像真人的幻象。</sub>
+<p align="center">
+  <strong>Know you're being throttled — before you're banned.</strong>
+</p>
 
-> 给 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 一键打入**五层行为层加固**，
-> 让自动化的节奏和轨迹更接近真人 —— 降低被风控误伤的概率。
-> **不承诺"不被封号"**：任何自动化都有被风控的可能，本工具只降低概率、不消除风险（[能力边界](docs/anti-detection.md#已知未覆盖的检测维度)）。
+<p align="center">
+  Behavior-layer hardening for <a href="https://github.com/NanmiCoder/MediaCrawler">MediaCrawler</a>,
+  plus the early-warning radar that every other anti-detect tool forgets to ship.
+</p>
 
-**它不是又一个爬虫。** 它是一套加固工具 + 安全方法论：你已经装好的 MediaCrawler，跑一条命令，就从"机器人裸奔"变成"尽量像真人"。所有改动**自动备份、幂等、可一键还原**，绝不损坏你的文件。
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue">
+  <img alt="Dependencies" src="https://img.shields.io/badge/core%20deps-zero-brightgreen">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-7-orange">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-24%20passing-success">
+  <img alt="License" src="https://img.shields.io/badge/license-research--only-lightgrey">
+</p>
 
-**两大能力**：① 给爬虫做**五层抓取加固**（下方）；② 一套**拟人互动引擎**做安全的点赞/关注/收藏/评论（见下文「互动引擎」）。
+---
 
-> [!IMPORTANT]
-> **用途边界**：Mirage 仅用于**学习、研究与个人合规测试**。请只用**小号**、控制频率。
-> ⚠️ **说清楚一件事**：多数平台的服务条款本就禁止自动化访问与自动化互动 —— 所以这里不会假装"照着用就合规"。
-> **是否使用、用在哪、后果由你自己判断和承担**；本项目只提供技术与边界说明，不为任何用途背书。
-> 工具默认就帮你守住三条红线：① 互动引擎 `dry_run` 默认开，绝不替你自动实跑；② 遇验证码立即停手，**不破解人机验证**；③ 不碰主号、不做商业刷量 / 刷粉。
-> 完整边界见 [使用政策与伦理边界](docs/usage-policy.md)。
+Most anti-detect tooling helps you **look** human. None of it tells you **when that stopped working**.
 
-## 🧭 按你的目的找路
+Platforms rarely ban you outright. First they quietly degrade you: a few more captchas, responses that
+still return `200` but come back thinner, latency creeping up, success rate sliding. By the time you
+see a hard `403`, you've been burning proxy budget on garbage data for days.
 
-| 你想做的事 | 去哪 |
-|-----------|------|
-| 怕被封，给爬虫加固 | 下方「快速开始」：`apply_hardening.py --dry-run` → 真打 → `--check` |
-| 被警告 / 限流了怎么救 | [docs/safe-usage.md](docs/safe-usage.md)：立刻停手 → 切 safe 档 → 换小号 |
-| **想在被封"之前"就知道** | `mirage radar` ⭐软封杀预警：验证码率↑/返回缩水/延迟漂移/蜜罐命中/成功率下滑 五信号看趋势 |
-| 多账号怕被关联封一窝 | `mirage profile <种子>` ⭐一账号一画像：自洽指纹 + 矛盾校验 + 种子化噪声（`--emit` 导出注入 JS）|
-| 安全养号 / 点赞关注收藏 | 下方「互动引擎」（dry-run 默认，绝不替你实跑） |
-| 扩到抖音 / B站 等别的平台 | 一条 `-p all` 通吃 7 平台 → [docs/platforms.md](docs/platforms.md) |
-| 抖音签名挡住了（a_bogus/msToken/ttwid） | [docs/signature-layer.md](docs/signature-layer.md)：四重门 → 桥接 F2 + [桥接模板](examples/douyin_signature_bridge.py) |
-| 想抓 App（不是网页版） | [docs/app-capture.md](docs/app-capture.md)：抓包 vs UI自动化 两条路 + 维护现实 |
-| 想抓海外（YouTube/X/IG/TikTok） | [docs/overseas.md](docs/overseas.md)：公开 yt-dlp 一把梭 / 账号态看 pacing |
-| 想抓的平台不在上面（淘宝/美团/微信/Reddit…） | [docs/platform-coverage.md](docs/platform-coverage.md)：全平台覆盖矩阵 + 各自对应的现成栈 |
-| 看加固到底有没有效 | `fingerprint_benchmark.py --botd`（第三方 BotD 判定）或 `--detect-url`（真检测页通过率+截图）。⚠️ 本地 7 信号 BotScore 只是自打的相对分，**不是证据** |
-| 弄懂原理（五层怎么防） | [docs/anti-detection.md](docs/anti-detection.md) |
+Mirage does both halves:
 
-```bash
-python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run   # 先看会改什么
-python scripts/apply_hardening.py /path/to/MediaCrawler             # 真打（自动备份）
-python scripts/apply_hardening.py /path/to/MediaCrawler --check     # 体检五层状态
-```
+1. **Hardening** — one command patches your existing MediaCrawler install with five behavior layers.
+2. **Observability** — a soft-ban radar that reads five leading indicators and tells you to slow down
+   *before* the ban lands.
 
-## ✨ 五层防护
+> **Why Mirage can do #2 when nobody else can:** an anti-detect browser only sees fingerprints. A proxy
+> vendor only sees IPs. A captcha service only sees challenges. Mirage sits at the one place where
+> *what you inject*, *what you send*, and *what comes back* are all visible at once.
 
-| 层 | 防住的风控信号 | 怎么做 |
-|----|--------------|--------|
-| **L1** stealth.min.js 注入 | `navigator.webdriver` 等自动化指纹 | CDP 启动浏览器时自动注入 |
-| **L2** 随机抖动睡眠 | 固定间隔 = 机器节拍 | `base × U(0.7,1.6)`，6s → 实际 4.2~9.6s 随机 |
-| **L3** 批次限制 + 安全参数 | 单次高曝光、无头浏览器 | 单次 ≤8 条、真 Chrome、单并发、禁无头 |
-| **L4** 启动预热 | 打开即搜 = 非人类 | 首次搜索前停留 3~8s |
-| **L5** 鼠标 + 滚动模拟 | 睡眠期页面"冻死" | 翻页间隔随机滚动 + 移动鼠标 |
-
-> 原理逐层拆解见 [docs/anti-detection.md](docs/anti-detection.md)。
-
-> 🌐 **不只小红书**：五层加固通用于 MediaCrawler 全部 **7 个平台**（小红书 / 抖音 / 快手 / B站 / 微博 / 贴吧 / 知乎），一条 `-p all` 全加固。各平台反爬强度分级与建议参数见 [docs/platforms.md](docs/platforms.md)。
-
-## 📦 前置依赖
-
-- **Python 3.11+**（与 MediaCrawler 一致）
-- 已装好并能跑通 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)
-- 浏览器驱动（仅指纹自检/benchmark 需要）：**推荐 `pip install patchright && patchright install chromium`** —— patchright 是 Playwright 的 drop-in 补丁版，补掉原生 Playwright 的 CDP `Runtime.Enable`/`Console.enable` 泄漏（注入脚本层补不了这一层）。没装则退回 `pip install playwright`。`mirage doctor` 会检测并提示。
-- **核心脚本 `apply_hardening.py` 零额外依赖** —— 只用 Python 标准库，clone 下来直接能跑
-
-## 🚀 快速开始
-
-前提：你已经装好并能跑通 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)。
+## Quick start
 
 ```bash
-git clone https://github.com/millennialdreamer/mirage.git
-cd mirage
+git clone https://github.com/millennialdreamer/mirage.git && cd mirage
 
-# 1. 先 dry-run，看清楚将要改哪些文件（不落盘）
-python scripts/apply_hardening.py ~/path/to/MediaCrawler --dry-run
+# 1. See exactly what would change — nothing is written
+python scripts/apply_hardening.py /path/to/MediaCrawler --dry-run
 
-# 2. 确认无误后真打（每个被改文件先备份成 *.xhs-stealth.bak）
-python scripts/apply_hardening.py ~/path/to/MediaCrawler
+# 2. Apply it (every touched file is backed up first)
+python scripts/apply_hardening.py /path/to/MediaCrawler
 
-# 3. 体检：确认五层都到位
-python scripts/apply_hardening.py ~/path/to/MediaCrawler --check
-
-# 反悔随时还原
-python scripts/apply_hardening.py ~/path/to/MediaCrawler --revert
+# 3. Health-check all five layers
+python scripts/apply_hardening.py /path/to/MediaCrawler --check
 ```
 
-## 🧰 脚本一览
+Changed your mind? `--revert` restores every file from backup. Ran it twice? It's idempotent — zero diff.
 
-| 脚本 | 作用 |
-|------|------|
-| `scripts/apply_hardening.py` | ⭐核心：一键打入五层加固，幂等 / 自动备份 / 可回滚 / dry-run / 体检 |
-| `scripts/safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换，并预估抓取速率 |
-| `scripts/verify_stealth.py` | 指纹自检：开浏览器对比"注入前/后"，确认 webdriver 等特征被隐藏 |
-| `scripts/fingerprint_benchmark.py` | 三档验证：`--botd`(第三方 BotD 确定性判定) / `--detect-url`(真检测页通过率+全页截图) / 本地 7 信号相对分(**非证据**)；驱动优先 patchright；真跑手动 |
-| `scripts/human_behavior.py` | 人类行为模拟模块（抖动睡眠 / 预热 / 鼠标滚动），可手动集成复用 |
-| `scripts/weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游有无反检测补丁 |
-| `scripts/human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（dry-run 默认） |
-| `scripts/interaction_policy.py` | 互动配额：保守每日上限 + 最小间隔 + 跨 session 计数持久化 |
-| `scripts/mirage_loop.py` | ⭐终极"拟人刷号"主循环：大量浏览 + 少量克制互动 + 风控熔断 + 软封杀预警自动降速 |
-| `scripts/soft_ban_radar.py` | ⭐**软封杀早期预警**：五前兆信号看趋势，在被封**之前**判断"正在被降权"并建议降速/换号；跨 session 基线、多账号隔离、小样本不给结论 |
-| `scripts/device_profile.py` | ⭐**统一设备画像 + 自洽校验**：所有指纹值从同一张画像派生（一致性 > 单值伪装）+ 出厂矛盾检测 + **种子化确定性** canvas/audio 噪声（同 profile 跨会话恒定，不是每次随机） |
+Core hardening has **zero third-party dependencies**. Clone it and it runs.
 
-## 🤝 互动引擎（点赞 / 关注 / 收藏 / 评论）
+## The radar — Mirage's actual differentiator
 
-除了抓取加固，Mirage 还提供一套**拟人互动引擎**——像真人一样安全地点赞/关注/收藏/评论。**0 封控靠的是克制 + 拟人，不是狂刷**：
+```console
+$ mirage radar
 
-- **dry-run 默认开**：默认只把鼠标移动到位、演示不真点，确认无误才 `dry_run=False`。
-- **保守每日上限 + 最小间隔 + 跨 session 计数**：杜绝秒赞、超量、重启绕过。
-- **贝塞尔点击 + 先看够才赞 + 二段决策**：看了也只约 45% 才互动，把配额留给优质内容。
-- **终极"拟人刷号"循环**：大量浏览 + 少量克制互动 + 遇风控（验证码/限流）自动熔断。
-
-```python
-from mirage_loop import MirageLoop
-loop = MirageLoop(page, dry_run=True, conservative=True)   # 新号建议 conservative
-await loop.run()
+⚠ Soft-ban radar · account "worker-03"
+  Level: WARNING     Risk: 47/100     Samples: 61
+  Signals:
+    captcha rate:        0.15
+    completeness drop:   0.22      ← responses are quietly getting thinner
+    latency ratio:       1.9x
+    success rate:        0.71
+    honeypot hits:       0
+  Advice: Clear degradation trend. Halve your rate now, shrink batches,
+          pause interactions, and watch whether it recovers.
 ```
 
-⚠️ 互动有**真实对外后果**（真给人点赞/评论），**只用小号**。完整安全手册见 [docs/interaction-safety.md](docs/interaction-safety.md)。
+| Signal | Why it leads the ban |
+|---|---|
+| Captcha rate ↑ | Should sit at ~0. Anything above means you're already suspected |
+| **Response completeness ↓** | **The classic shadow-ban tell — still `200`, just quietly thinner** |
+| Latency drift | Throttling shows up as median response time creeping up |
+| Honeypot hits | Conclusive. Invisible elements are only ever touched by automation |
+| Success-rate slope | Chronic degradation, measured against your own baseline |
 
-## 🛡️ 安全使用（务必先读）
+Baselines persist across sessions and are isolated per account. Under 12 samples it refuses to
+guess and says so — a trend built on 5 data points is noise, not signal.
 
-加固降低概率，**不等于安全许可**。三条铁律：
+## Where Mirage fits
 
-1. **只用小号测试，主号永远不碰爬虫。**
-2. **放量循序渐进**：首日 ≤30 条，次日 ≤100 条，中间隔几小时，绝不连续猛抓。
-3. 默认走 **safe 档**；`fast` 档显著提高被风控概率，只在"豁出去快抓一把"时才用。
+It does **not** compete with browser-level stealth. It sits on top of it and covers what that layer can't.
 
-完整手册（含被警告后怎么办）见 [docs/safe-usage.md](docs/safe-usage.md)。
+| | Mirage | undetected-chromedriver / patchright | camoufox / antidetect browsers |
+|---|:--:|:--:|:--:|
+| Operating layer | behavior + ops | browser driver | browser engine |
+| Patches your **existing** crawler | ✅ | ❌ | ❌ |
+| CDP `Runtime.Enable` leak | ✅ *(via patchright)* | ✅ | ✅ |
+| Canvas / WebGL spoofing | ⚠️ injection-level | ❌ | ✅ engine-level |
+| Pacing, quotas, circuit-breaking | ✅ | ❌ | ❌ |
+| **Soft-ban early warning** | ✅ | ❌ | ❌ |
+| Fingerprint self-consistency audit | ✅ | ❌ | ⚠️ |
 
-## 🔬 为什么有效
+**Use them together.** Mirage will actively tell you to install `patchright` — it fixes a driver-layer
+leak that no injected script can reach.
 
-小红书风控核心判断"你像不像真人"。本工具不去破解签名，而是从**行为层**让自动化尽量贴近真人：真实 Chrome、随机节奏、人类停顿、鼠标活动。行为层比签名层更稳 —— 签名算法每隔几周会变，但"慢一点、有抖动、鼠标会动"永远像人。详见 [docs/anti-detection.md](docs/anti-detection.md)。
+## Features
 
-## ⚠️ 免责声明
+<details open>
+<summary><strong>Five hardening layers</strong> — one command, all 7 MediaCrawler platforms</summary>
 
-仅供学习与研究。**加固只能降低被检测概率，无法消除** —— 任何爬虫都有被风控的可能。使用者须遵守小红书的使用条款与 robots 规则，合理控制频率，不得用于商业或任何不当用途。因使用本工具产生的一切后果由使用者自负。
+| Layer | Signal it removes | How |
+|---|---|---|
+| **L1** stealth injection | `navigator.webdriver` and friends | auto-injected at CDP launch |
+| **L2** jittered sleep | fixed intervals = machine cadence | log-normal, right-skewed like real humans |
+| **L3** batch + safe params | high burst exposure, headless | ≤8 items, real Chrome, single concurrency |
+| **L4** warm-up | opening straight into a search | 3–8s dwell before first query |
+| **L5** mouse + scroll | a frozen page during sleep | Bézier curves with ease-in-out |
 
-## ⚠️ 已知边界 / 不支持
+`-p all` covers Xiaohongshu, Douyin, Kuaishou, Bilibili, Weibo, Tieba and Zhihu.
+</details>
 
-Mirage 是针对 MediaCrawler **网页版爬虫**的行为层加固工具，以下场景**超出其能力范围**，请勿误用：
+<details>
+<summary><strong>Device profile</strong> — consistency beats single-value spoofing</summary>
 
-1. **App 抓取（客户端）**：Mirage 只加固 Playwright 驱动的**网页版**。手机 App、桌面客户端要抓取数据，需要抓包（Charles/mitmproxy）、Hook（Frida）、模拟器等完全不同的技术栈，Mirage 对此无能为力。
+Modern detectors don't check values, they check for **contradictions**: a Windows UA with an Apple GPU,
+a Shanghai timezone with US-only locales, 16 cores on the main thread and 4 in a worker.
 
-2. **海外平台**：TikTok、Instagram、X（Twitter）、YouTube 等海外平台使用的是**不同爬虫框架**，不在 MediaCrawler 支持范围内，Mirage 自然也不覆盖。
+Spoofing one field at a time makes you *more* detectable, not less. Mirage derives every injected value
+from one coherent profile and audits it before use:
 
-3. **签名算法逆向**：抖音 `a_bogus`、小红书 `x-s`、快手签名等由 MediaCrawler 上游维护。平台一旦更新签名算法，抓取可能**暂时失效**，需等待上游跟进修复。Mirage 不参与签名逆向，`weekly_maintenance.sh` 会提示你关注上游更新。
+```bash
+mirage profile worker-03 --emit fp.js
+# [device profile seed=worker-03] ✓ self-consistent
+#   Windows 11 / Win32 / 12 cores 8GB / 1920x1080 / zh-CN / Asia/Shanghai
+#   GPU=ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11...)
+```
 
-4. **极端网络环境**：弱网、断线重连、代理不稳等场景需要配合专用的 `network_resilience` 模块处理重试与恢复。Mirage 核心模块假设网络基本畅通，不内置断线容灾。
+Same seed always yields the same profile, so a given account stays stable across sessions.
+Canvas and audio noise is **seeded and deterministic** — per-call randomness is itself a tell now,
+since detectors simply render twice and compare hashes.
+</details>
 
-> 简单说：Mirage 做好一件事——**让 MediaCrawler 的网页端自动化行为更像真人**。超出这个范围的需求，请寻找对应专项工具。
+<details>
+<summary><strong>Ops tooling</strong> — canary, upstream guard, captcha hook</summary>
 
-## 📄 License
+- `mirage canary <path>` — offline health check. Are the patches still there? Did an upstream refactor
+  break the anchors? Exit code included, so CI can gate on it. Makes zero network calls.
+- `mirage guard-install <path>` — git hook that warns you when an upstream `pull` silently wipes your
+  hardening. It only warns; it will never rewrite third-party source behind your back.
+- `MirageLoop(on_captcha=...)` — **Mirage does not solve captchas.** It detects, hands off to your own
+  solver, and humanizes the resume timing. Resuming instantly after a solve is itself a robot tell.
+</details>
 
-本项目以学习研究为目的发布，继承上游 MediaCrawler 的非商用精神。详见 [LICENSE](LICENSE)。
+<details>
+<summary><strong>Verification</strong> — third-party judgment, not self-scored</summary>
+
+```bash
+python scripts/fingerprint_benchmark.py --botd        # FingerprintJS BotD verdict
+python scripts/fingerprint_benchmark.py --detect-url  # real detection page + full screenshot
+```
+
+The local 7-signal BotScore is a **relative baseline, not evidence** — it's a score we give ourselves.
+Ranked by how much you should trust them: third-party verdict > real detection page > local score.
+</details>
+
+## Honest limits
+
+Read this before you rely on it. Every claim below is a limit of the *architecture*, not of the effort.
+
+- **Injection layer has a hard ceiling.** `toString` leaks, execution-timing races, worker-realm escapes
+  and property-descriptor traces cannot be fixed from injected JavaScript. Expect it to hold against
+  static fingerprinting (~70–80%) and to fall well short against CreepJS-style active probing (~40–50%).
+  Going beyond that requires a recompiled engine — out of scope here, by design.
+- **TLS/JA3 is not ours.** It's decided by the network stack; JS can't touch it. See
+  [docs/tls-fingerprint.md](docs/tls-fingerprint.md).
+- **`stealth.min.js` is deprecated upstream** (Feb 2025), and its random-canvas-noise approach has since
+  become a detection signal in its own right. Install `patchright`; `mirage doctor` will nag you about it.
+- **Signature layers (`a_bogus`, `x-s`, `msToken`) are not ours either.** We point you at maintained
+  libraries instead of pretending to reverse them — [docs/signature-layer.md](docs/signature-layer.md).
+- **Hardening lowers probability. It does not eliminate risk.** Anything automated can still get caught.
+
+## Documentation
+
+| Topic | |
+|---|---|
+| How the five layers work | [docs/anti-detection.md](docs/anti-detection.md) |
+| Safe usage, and what to do after a warning | [docs/safe-usage.md](docs/safe-usage.md) |
+| Per-platform anti-crawl strength | [docs/platforms.md](docs/platforms.md) |
+| Douyin's four signature walls → bridging F2 | [docs/signature-layer.md](docs/signature-layer.md) |
+| TLS / JA3 boundaries | [docs/tls-fingerprint.md](docs/tls-fingerprint.md) |
+| App capture: mitmproxy vs Appium | [docs/app-capture.md](docs/app-capture.md) |
+| Overseas platforms | [docs/overseas.md](docs/overseas.md) |
+| Full platform coverage matrix | [docs/platform-coverage.md](docs/platform-coverage.md) |
+| Interaction safety | [docs/interaction-safety.md](docs/interaction-safety.md) |
+| Usage policy and ethics | [docs/usage-policy.md](docs/usage-policy.md) |
+
+## CLI
+
+| Command | |
+|---|---|
+| `mirage apply <path> [-p platform] [--dry-run/--check/--revert]` | apply / inspect / undo hardening |
+| `mirage radar [--account X] [--reset]` | soft-ban early warning |
+| `mirage profile <seed> [--emit file]` | generate + audit a device profile |
+| `mirage canary <path>` | offline hardening health check |
+| `mirage guard-install / guard-uninstall <path>` | git hook against upstream overwrites |
+| `mirage doctor` | environment check |
+| `mirage verify` / `mirage benchmark` | fingerprint checks *(you run these yourself)* |
+
+## Install
+
+```bash
+pip install -e .                    # core, zero third-party deps
+pip install -e ".[browser]"         # + patchright, for fingerprint verification
+```
+
+Python 3.9+. You need a working [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) install —
+Mirage hardens it, it isn't a crawler itself.
+
+## Development
+
+```bash
+bash scripts/ci.sh                              # pytest + ruff + mypy
+git config core.hooksPath .githooks             # run CI automatically before every push
+```
+
+Patches to third-party source go through atomic write → AST validation → rollback on failure. The
+regression suite runs the real regex anchors against a real MediaCrawler checkout (auto-detected, or
+set `MIRAGE_TEST_MEDIACRAWLER`); it skips cleanly when there isn't one. No third-party source is
+vendored into this repo.
+
+## Scope and responsibility
+
+For **learning, research and personal testing**. Use throwaway accounts. Keep the rate low.
+
+To be blunt about it: most platforms' terms of service already prohibit automated access and automated
+interaction. This project won't pretend that following a checklist makes that go away. **Whether to use
+it, what to use it on, and the consequences are yours to judge and yours to carry.** It ships technique
+and boundaries — not an endorsement of any particular use.
+
+Interaction engine defaults to `dry_run=True`, stops on captcha rather than attempting to defeat it, and
+enforces daily quotas below what a heavy human user would hit. See
+[docs/usage-policy.md](docs/usage-policy.md).
+
+## License
+
+Research and non-commercial use — see [LICENSE](LICENSE).

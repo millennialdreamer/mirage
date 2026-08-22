@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-一键切换 MediaCrawler 的"安全档 / 常规档 / 激进档"
+One-click switch MediaCrawler "safe / normal / fast" profiles
 
-用法:
-    python config/safe_profile.py            # 不带参数 → 只显示当前状态
-    python config/safe_profile.py safe       # 切到安全档(最稳,最慢)
-    python config/safe_profile.py normal     # 切到常规档(平衡)
-    python config/safe_profile.py fast       # 切到激进档(快,容易被风控)
+Usage:
+    python config/safe_profile.py            # no args -> show current status
+    python config/safe_profile.py safe       # switch to safe profile (most stable, slowest)
+    python config/safe_profile.py normal     # switch to normal profile (balanced)
+    python config/safe_profile.py fast       # switch to fast profile (fast, easily triggers risk control)
 
-首次切档时会自动把原配置备份到 config/base_config.py.bak。
+On first switch, the original config is automatically backed up to config/base_config.py.bak.
 """
 
 import os
@@ -27,7 +27,7 @@ PROFILES = {
 
 
 def read_current() -> dict:
-    """从 base_config.py 解析当前数值。"""
+    """Parse current values from base_config.py."""
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         text = f.read()
     out = {}
@@ -38,13 +38,13 @@ def read_current() -> dict:
 
 
 def apply_profile(name: str) -> None:
-    """把指定档位的值写回 base_config.py。"""
+    """Write the specified profile's values back to base_config.py."""
     if name not in PROFILES:
-        sys.exit(f"未知档位: {name}。可选: {', '.join(PROFILES)}")
+        sys.exit(f"Unknown profile: {name}. Options: {', '.join(PROFILES)}")
 
     if not os.path.exists(BACKUP_PATH):
         shutil.copy2(CONFIG_PATH, BACKUP_PATH)
-        print(f"✓ 原配置已备份 → {BACKUP_PATH}")
+        print(f"✓ Original config backed up → {BACKUP_PATH}")
 
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         text = f.read()
@@ -58,43 +58,43 @@ def apply_profile(name: str) -> None:
             flags=re.MULTILINE,
         )
         if n == 0:
-            print(f"⚠ 没找到 {key},跳过")
+            print(f"⚠ {key} not found, skipping")
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         f.write(text)
 
-    print(f"✓ 已切换到「{name}」档")
+    print(f"✓ Switched to '{name}' profile")
 
 
 def print_status(current: dict) -> None:
-    """显示当前档位 + 估算抓取速率。"""
-    # 推断当前是哪档(任何一项不匹配都算 "custom")
+    """Show current profile + estimated crawl rate."""
+    # Infer current profile (any mismatch counts as 'custom')
     matched = next(
         (name for name, vals in PROFILES.items() if all(current.get(k) == v for k, v in vals.items())),
         "custom",
     )
 
     sleep_sec = current.get("CRAWLER_MAX_SLEEP_SEC") or 0
-    avg_jitter = sleep_sec * 1.15  # 0.7x~1.6x 的平均值
+    avg_jitter = sleep_sec * 1.15  # average of 0.7x~1.6x
     notes_per_run = current.get("CRAWLER_MAX_NOTES_COUNT") or 0
-    # 每条笔记约 2 次 sleep(翻页 + 取详情),保守估
+    # about 2 sleeps per note (pagination + detail fetch), conservative estimate
     estimated_seconds = notes_per_run * avg_jitter * 2
 
     print("=" * 50)
-    print(f" 当前档位: {matched}")
+    print(f" Current profile: {matched}")
     print("-" * 50)
-    print(f" CRAWLER_MAX_SLEEP_SEC     = {current['CRAWLER_MAX_SLEEP_SEC']}  (实际抖动 ~{sleep_sec*0.7:.1f}s 到 {sleep_sec*1.6:.1f}s)")
-    print(f" CRAWLER_MAX_NOTES_COUNT   = {current['CRAWLER_MAX_NOTES_COUNT']}  (单次抓取上限)")
-    print(f" MAX_CONCURRENCY_NUM       = {current['MAX_CONCURRENCY_NUM']}  (并发数)")
+    print(f" CRAWLER_MAX_SLEEP_SEC     = {current['CRAWLER_MAX_SLEEP_SEC']}  (actual jitter ~{sleep_sec*0.7:.1f}s to {sleep_sec*1.6:.1f}s)")
+    print(f" CRAWLER_MAX_NOTES_COUNT   = {current['CRAWLER_MAX_NOTES_COUNT']}  (per-run max)")
+    print(f" MAX_CONCURRENCY_NUM       = {current['MAX_CONCURRENCY_NUM']}  (concurrency)")
     print("-" * 50)
     if notes_per_run:
-        print(f" 估算抓 {notes_per_run} 条耗时: ~{estimated_seconds:.0f}s ({estimated_seconds/60:.1f} 分钟)")
+        print(f" Estimated time to crawl {notes_per_run} notes: ~{estimated_seconds:.0f}s ({estimated_seconds/60:.1f} min)")
         per_100 = (100 / notes_per_run) * estimated_seconds
-        print(f" 估算抓 100 条耗时: ~{per_100/60:.1f} 分钟")
+        print(f" Estimated time to crawl 100 notes: ~{per_100/60:.1f} min")
     print("=" * 50)
-    print(" 切档:  python config/safe_profile.py [safe|normal|fast]")
+    print(" Switch profile: python config/safe_profile.py [safe|normal|fast]")
     if os.path.exists(BACKUP_PATH):
-        print(f" 恢复:  cp {BACKUP_PATH} {CONFIG_PATH}")
+        print(f" Restore: cp {BACKUP_PATH} {CONFIG_PATH}")
 
 
 def main():

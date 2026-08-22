@@ -1,20 +1,20 @@
-# 多平台反爬对照
+Multi-Platform Anti-Crawl Reference
 
-Mirage 的五层加固（行为层）对 MediaCrawler 支持的 **7 个平台通用**。但各平台反爬强度天差地别——本表帮你定"对应方法"和参数保守度。
+Mirage's five-layer hardening (behavior layer) is universal across the **7 platforms** supported by MediaCrawler. But anti-crawl strength varies wildly from platform to platform—this table helps you choose the corresponding approach and parameter conservatism.
 
-## 反爬强度分级
+## Anti-Crawl Strength Tiers
 
-| 平台 | 别名 | 强度 | 主要反爬机制 | 五层够吗 | 建议 |
+| Platform | Alias | Strength | Main anti-crawl mechanisms | Are the five layers enough? | Recommendation |
 |------|------|------|-------------|---------|------|
-| 抖音 | `dy` | 🔴 极高 | a_bogus / X-Bogus 签名 + 设备指纹 ttwid + 强行为风控 | 行为层必备但不充分 | SLEEP 调到 10s+，量极小，签名靠上游 |
-| 快手 | `ks` | 🟠 高 | 签名 + did 设备标识 + 风控 | 同上 | SLEEP 8s+，保守 |
-| 知乎 | `zhihu` | 🟡 中 | x-zse-96 签名 + cookie 校验 | 行为层 + 自带签名够日常 | 默认 safe 档 |
-| 小红书 | `xhs` | 🟡 中 | x-s / x-t 签名 + 行为风控 | 行为层 + 签名 | 默认 safe 档 |
-| 微博 | `wb` | 🟡 中 | cookie 校验 + 老式反爬 | 行为层够 | 默认 safe 档 |
-| B站 | `bili` | 🟢 中低 | wbi 签名（较简单）+ 风控松 | 行为层富余 | 可上 normal 档 |
-| 贴吧 | `tieba` | 🟢 低 | 基本无强反爬 | 行为层富余 | 可 normal / fast |
+| Douyin | `dy` | 🔴 Extremely high | a_bogus / X-Bogus signature + device fingerprint ttwid + strict behavioral risk control | Behavior layer required but not sufficient | Set SLEEP to 10s+, keep volume very low, signature relies on upstream |
+| Kuaishou | `ks` | 🟠 High | signature + did device identifier + risk control | Same as above | SLEEP 8s+, conservative |
+| Zhihu | `zhihu` | 🟡 Medium | x-zse-96 signature + cookie validation | Behavior layer + built-in signature is enough for daily use | Default safe tier |
+| Xiaohongshu | `xhs` | 🟡 Medium | x-s / x-t signature + behavioral risk control | Behavior layer + signature | Default safe tier |
+| Weibo | `wb` | 🟡 Medium | cookie validation + legacy anti-crawl | Behavior layer is enough | Default safe tier |
+| Bilibili | `bili` | 🟢 Medium-low | wbi signature (relatively simple) + loose risk control | Behavior layer has surplus | Can use normal tier |
+| Tieba | `tieba` | 🟢 Low | basically no strong anti-crawl | Behavior layer has surplus | Can use normal / fast |
 
-## 一键加固
+## One-Click Hardening
 
 ```bash
 python apply_hardening.py <MediaCrawler根> -p all --dry-run    # 先看 7 平台会改什么
@@ -24,51 +24,15 @@ python apply_hardening.py <MediaCrawler根> -p all --check      # 全平台体�
 python apply_hardening.py <MediaCrawler根> -p bili --revert    # 还原某平台
 ```
 
-> `cdp_browser.py`(L1) 和 `base_config.py`(L3) 是全平台共享的，`-p all` 时第一个平台改、其余幂等跳过；`core.py`(L2/L4/L5) 各平台独立加固。
+> `cdp_browser.py` (L1) and `base_config.py` (L3) are shared across all platforms. When `-p all` is used, the first platform changes them and the rest are skipped idempotently; `core.py` (L2/L4/L5) is hardened independently per platform.
 
-## 为什么"难反制"——双层防线
+## Why “Hard to Counter”—a Two-Layer Defense
 
-1. **行为层（Mirage 五层）**：让请求"像真人"。这层最稳——平台风控模型再变，"慢一点、有抖动、真 Chrome、鼠标会动"永远像人。**7 平台通用，一次改锚点全适配**。
-2. **签名层（MediaCrawler 自带）**：a_bogus / x-s / wbi 等。这层最易失效——平台一更新签名算法，就要等上游 MediaCrawler 跟进。**Mirage 不碰签名，靠上游**（`weekly_maintenance.sh` 会提醒上游补丁）。
+1. **Behavior layer (Mirage five layers)**: makes requests “look like a real person.” This layer is the most stable—no matter how the platform’s risk-control models change, “slower, with jitter, real Chrome, mouse movements” will always look human. **Universal across 7 platforms; change the anchor once and it adapts everywhere.**
+2. **Signature layer (built into MediaCrawler)**: a_bogus / x-s / wbi, etc. This layer fails most easily—once the platform updates its signature algorithm, you have to wait for upstream MediaCrawler to catch up. **Mirage does not touch signatures; it relies on upstream** (`weekly_maintenance.sh` will remind you about upstream patches).
 
-所以"难反制" = 行为层稳如磐石 + 签名层跟随上游。两层各司其职，比任何单层方案都耐打。
+So “hard to counter” = a rock-solid behavior layer + a signature layer that follows upstream. Each layer does its own job, making this more resilient than any single-layer approach.
 
-## 验证码 / 滑块应对
+## CAPTCHA / Slider Handling
 
-各平台检测到异常行为时会弹出验证码或滑块挑战（CAPTCHA/滑块验证）。Mirage 的立场是**诚实面对，不硬刚**：
-
-### 策略原则
-
-| 情况 | Mirage 的做法 |
-|------|--------------|
-| 检测到验证码弹出 | **立即停止当前任务**，不继续操作，避免触发更高级风控 |
-| 滑块/点击验证 | **不自动破解**，打印提示并等待人工介入 |
-| 多次失败 | 本次 session 熔断，建议更换 IP / 等待冷却后重试 |
-
-### 各平台验证码触发频率
-
-| 平台 | 弹出频率 | 类型 | 应对建议 |
-|------|---------|------|---------|
-| 抖音 `dy` | 高（行为稍异常即触发） | 滑块、图文点击 | 保守参数 + 遇到立即人工过 |
-| 快手 `ks` | 中高 | 滑块 | 同上 |
-| 小红书 `xhs` | 中 | 滑块 | safe 档下触发率较低 |
-| 微博 `wb` | 中低 | 短信/邮箱验证为主 | 新账号登录态稳定可降频 |
-| B站 `bili` | 低 | 极少 | 正常 safe 档通常不触发 |
-| 知乎 `zhihu` | 低 | 极少 | 同上 |
-| 贴吧 `tieba` | 极低 | 几乎无 | — |
-
-### 铁律：Mirage 不破解验证码
-
-Mirage **不集成任何验证码识别/自动破解**（不用 2captcha、ddddocr、打码平台等）。理由：
-
-1. **破解验证码是平台明确禁止的行为**，风险远高于普通爬取。
-2. 自动破解被识别后会触发更严厉的封控（设备封禁、IP 黑洞），代价不对称。
-3. 遇到验证码说明当前行为已触发风控阈值，**正确响应是停下来冷却**，而不是硬攻。
-
-遇到验证码的正确流程：**停止 → 人工完成验证（如需要）→ 大幅降低频率/换 IP → 等待至少 30 分钟冷却 → 从最低量重新开始**。
-
-## 诚实声明
-
-- **强反爬平台（抖音/快手）即便加固，也可能因签名算法更新而暂时失效** —— 这是任何爬虫的共同天花板，不是 Mirage 能单独解决的。遇到大面积抓取失败，先查上游 MediaCrawler 有没有更新签名。
-- 各平台都要**只用小号、循序渐进**；强反爬平台更要把量压到最小、间隔拉到最大。
-- 加固降低被识别概率，**不保证不被封**。
+When a platform detects abnormal behavior, it may pop up a CAPTCHA or slider challenge. Mirage’s stance

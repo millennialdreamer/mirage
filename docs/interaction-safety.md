@@ -1,44 +1,44 @@
-# 互动安全手册
+# Interaction Safety Handbook
 
-Mirage 的互动引擎能"像真人一样"在小红书做点赞/关注/收藏/评论。但**互动和抓取性质完全不同**——它有真实对外后果（真给陌生人点赞、真发评论），是风控最敏感的区域。这份手册请务必读完。
+Mirage's interaction engine can like/follow/collect/comment on Xiaohongshu "like a real person". But **interaction and scraping are completely different in nature** — it has real external consequences (actually liking strangers' posts, actually posting comments), and it is the most sensitive area for risk control. Please read this handbook thoroughly.
 
-## 这是什么 / 不是什么
+## What this is / is not
 
-- **是**：拟人克制的互动辅助——像真人一样温和地与你感兴趣的内容互动，节奏比手动还慢、还克制。
-- **不是**：批量刷量机、僵尸号矩阵工具。Mirage 不破解签名、不绕验证码、不养僵尸号。
+- **Is**: a human-like, restrained interaction assistant — it gently interacts with content you're interested in like a real person, at a pace slower and more restrained than manual operation.
+- **Is not**: a bulk engagement machine or zombie-account matrix tool. Mirage does not crack signatures, bypass CAPTCHAs, or farm zombie accounts.
 
-## 安全铁律（写进了代码，不只是建议）
+## Security iron rules (written into the code, not just suggestions)
 
-1. **dry-run 默认开**：默认只把鼠标移动到位、打印"将做什么"，**不真点**。真互动必须显式 `dry_run=False` / `--live`。
-2. **只用小号，主号永不碰**。互动出事会连累整个号。
-3. **保守每日上限**：默认 点赞 150 / 关注 30 / 收藏 80 / 评论 20（每天）。新号请开 `conservative=True` 砍到 1/3。
-4. **AI 绝不替你实跑**：互动有真实后果，实机操作由你亲自发起。
+1. **dry-run is on by default**: by default it only moves the mouse into place and prints "what it would do", **does not actually click**. Real interaction must be explicitly enabled with `dry_run=False` / `--live`.
+2. **Only use alt accounts; never touch your main account**. If interaction gets an account in trouble, the whole account is implicated.
+3. **Conservative daily caps**: defaults are likes 150 / follows 30 / collects 80 / comments 20 (per day). For new accounts, enable `conservative=True` to cut these to 1/3.
+4. **AI will never run live for you**: interaction has real consequences; live operations must be initiated by you personally.
 
-## 各动作风险（从高到低）
+## Risk by action (from high to low)
 
-| 动作 | 风险 | 说明 |
+| Action | Risk | Notes |
 |------|------|------|
-| **评论** | 🔴 最高 | 内容风控最严：重复/广告词/带链接/带 @ 最易判违规甚至封号。内容必须自然、多样、与笔记相关。 |
-| **关注** | 🟠 高 | 频繁关注/取关易限流；账号有总关注上限。每天克制。 |
-| **收藏/点赞** | 🟡 中 | 相对安全，但**秒赞、规律间隔是大忌**——Mirage 用最小间隔 + 抖动 + 先停留来规避。 |
+| **Comment** | 🔴 Highest | Content risk control is strictest: repetition/advertising words/links/@ mentions are most likely to be judged as violations or even lead to a ban. Content must be natural, varied, and relevant to the note. |
+| **Follow** | 🟠 High | Frequent follow/unfollow easily triggers throttling; accounts have an overall follow cap. Keep it restrained daily. |
+| **Collect/Like** | 🟡 Medium | Relatively safe, but **instant likes and regular intervals are a major taboo** — Mirage avoids this with minimum interval + jitter + dwell first. |
 
-## 节奏建议（终极 loop 已内置）
+## Pacing recommendations (already built into the ultimate loop)
 
-- **大量浏览 + 少量互动**（`interact_prob` 0.1~0.2，即看 10 条最多互动 1~2 次）。
-- 不秒赞（先停留阅读）、随机顺序、自然间隔、偶尔走神。
-- 一天分几段，别连续猛刷；连续几天后歇 1~2 天。
-- **同一 WiFi 下别多号互动**——这是小红书重点打击的特征。
+- **Lots of browsing + little interaction** (`interact_prob` 0.1~0.2, i.e. out of every 10 items viewed, interact at most 1–2 times).
+- No instant likes (dwell and read first), random order, natural intervals, occasional zoning out.
+- Split daily usage into several sessions; don't hammer continuously; after several days in a row, rest 1–2 days.
+- **Don't interact with multiple accounts under the same WiFi** — this is a characteristic Xiaohongshu heavily targets.
 
-## 被警告 / 限流怎么办
+## What to do if warned / throttled
 
-1. loop 检测到"验证码/操作过于频繁/账号异常"会**自动熔断停止**。
-2. 当天别再互动，让号歇着。
-3. 下次切 `conservative=True`，把量再压低。
-4. 确认用的是小号；若手滑用了主号，立即停用。
-5. 连续被提示就歇几天，别硬刚。
+1. If the loop detects "CAPTCHA / operation too frequent / account abnormal", it will **automatically trip the circuit breaker and stop**.
+2. Don't interact any more that day; let the account rest.
+3. Next time switch to `conservative=True` and lower the volume further.
+4. Confirm you're using an alt account; if you accidentally used your main account, stop immediately.
+5. If you keep getting warnings, rest for a few days; don't push through.
 
-## 诚实声明
+## Honest disclaimer
 
-- **降低被风控误判的概率，不保证 0 封**。任何自动化互动都有被限流/封号的风险，要有心理准备。
-- 互动有**真实对外后果**（真给人点赞、真发评论），一切后果由使用者自负。
-- 请遵守小红书的使用条款，**只操作自己的账号**，合理控制频率，不用于刷量、不正当竞争或任何违规用途。
+- **Reduces the probability of being misjudged by risk control; does not guarantee zero bans**. Any automated interaction carries the risk of throttling or account bans; be mentally prepared.
+- Interaction has **real external consequences** (actually liking other people's posts, actually posting comments); all consequences are the user's own responsibility.
+- Please comply with Xiaohongshu's terms of use, **only operate your own account**, keep frequency reasonable, and do not use it for engagement manipulation, unfair competition, or any prohibited purpose.

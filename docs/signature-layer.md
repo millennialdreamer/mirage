@@ -1,54 +1,54 @@
-# 签名层：抖音四重门与「桥接现成库」的正解
+# Signature Layer: Douyin's Four Gates and the Correct Solution of "Bridging Existing Libraries"
 
-> 结论先行：抖音的签名反爬是**四重门叠加**，从零逆向是 2026 年公认的无底洞
-> （业界原话 *"Most TikTok Scrapers on GitHub Are Dead"*）。正解不是自己造签名，而是
-> **桥接到活跃维护的现成库 [F2](https://github.com/Johnserf-Seed/f2)（Apache-2.0）**——它已把四重门全部解决。
-> Mirage 的角色是**给出正确的桥接模板 + `mirage canary` 监测失效**，不接管、不自己逆向、不保证上游兼容
-> （这是 MediaCrawler 的请求层，非 Mirage 行为层）。
+> Bottom line upfront: Douyin's signature anti-crawling is **four gates stacked**. Reverse-engineering from scratch is a bottomless pit recognized industry-wide by 2026
+> (industry phrase: *"Most TikTok Scrapers on GitHub Are Dead"*). The correct solution is not building the signature yourself, but
+> **bridging to the actively maintained existing library [F2](https://github.com/Johnserf-Seed/f2) (Apache-2.0)**—it has already solved all four gates.
+> Mirage's role is **to provide a correct bridging template + `mirage canary` monitoring for failure**, not to take over, not to reverse-engineer itself, not to guarantee upstream compatibility
+> (this is MediaCrawler's request layer, not Mirage's behavior layer).
 
-## 抖音到底卡在哪（四重门，端到端实测）
+## Where Exactly Douyin Blocks You (Four Gates, End-to-End Testing)
 
-| 门 | 症状 | 归属 |
-|----|------|------|
-| ① 拿不到 id | 首页纯 SSR 空壳，连 video/user id 都提不到，要从搜索/分享/主页链接绕 | 请求层 |
-| ② msToken | **不在 cookie 里，要动态生成**（另一套反爬） | 请求层 |
-| ③ a_bogus + ttwid | 请求要正确的 a_bogus 签名 + ttwid | 请求层 |
-| ④ webid / verifyFp / 参数 | 还要 webid、verifyFp、s_v_web_id 等一堆参数 + 抖音频繁改版 | 请求层 |
-| ⑤ JA3 传输指纹 | httpx 发签名请求时 TLS 指纹暴露成 Python | 请求层（见 [tls-fingerprint.md](tls-fingerprint.md)）|
+| Gate | Symptom | Layer |
+|------|---------|-------|
+| ① Cannot get id | Homepage is a pure SSR empty shell; even video/user id cannot be extracted, you have to bypass via search/share/homepage links | Request layer |
+| ② msToken | **Not in cookie, generated dynamically** (another anti-crawler) | Request layer |
+| ③ a_bogus + ttwid | Requests require correct a_bogus signature + ttwid | Request layer |
+| ④ webid / verifyFp / parameters | Also need a bunch of parameters like webid, verifyFp, s_v_web_id, plus frequent Douyin changes | Request layer |
+| ⑤ JA3 transport fingerprint | httpx exposes TLS fingerprint as Python when sending signed requests | Request layer (see [tls-fingerprint.md](tls-fingerprint.md)) |
 
-**a_bogus 只是第一道门，后面还有四道。** 单点破 a_bogus 完全不够——这正是很多"只做了 xbogus/abogus"的爬虫在 2026 集体阵亡的原因。
+**a_bogus is only the first gate; there are four more behind it.** Cracking a_bogus alone is completely insufficient—this is exactly why many scrapers that "only did xbogus/abogus" died collectively in 2026.
 
-## 正解：桥接 F2（每一门都有对应真实解法）
+## The Right Solution: Bridging F2 (Each Gate Has a Corresponding Real Solution)
 
-F2（Johnserf-Seed/f2，**Apache-2.0**，活跃维护，覆盖 抖音/TikTok/微博）的管理器逐一对上四重门：
+F2 (Johnserf-Seed/f2, **Apache-2.0**, actively maintained, covers Douyin/TikTok/Weibo) has managers that correspond one-to-one with the four gates:
 
-| 门 | F2 真实 API |
-|----|-------------|
-| ① id | `SecUserIdFetcher.get_sec_user_id(分享/主页 url)` —— 从链接反解 sec_user_id，绕开 SSR 空壳 |
-| ② msToken | `TokenManager.gen_real_msToken()`（联网拿真 token）/ `gen_false_msToken()`（纯本地兜底） |
-| ③ a_bogus | `ABogusManager.model_2_endpoint(ua, base_endpoint, params)` → 返回补好 a_bogus 的完整 URL |
+| Gate | F2 Actual API |
+|------|---------------|
+| ① id | `SecUserIdFetcher.get_sec_user_id(share/homepage URL)` — reverse-resolve sec_user_id from the link, bypassing the SSR empty shell |
+| ② msToken | `TokenManager.gen_real_msToken()` (gets a real token over network) / `gen_false_msToken()` (pure local fallback) |
+| ③ a_bogus | `ABogusManager.model_2_endpoint(ua, base_endpoint, params)` → returns a complete URL with a_bogus filled in |
 | ③ ttwid | `TokenManager.gen_ttwid()` |
 | ④ webid / verifyFp | `TokenManager.gen_webid()` / `VerifyFpManager.gen_verify_fp()` / `gen_s_v_web_id()` |
-| ⑤ JA3 | `curl_cffi.requests.get(url, impersonate="chrome")`（见 [tls-fingerprint.md](tls-fingerprint.md)）|
+| ⑤ JA3 | `curl_cffi.requests.get(url, impersonate="chrome")` (see [tls-fingerprint.md](tls-fingerprint.md)) |
 
-可运行的桥接参考模板见 [`examples/douyin_signature_bridge.py`](../examples/douyin_signature_bridge.py)（对着 F2 当前真实 API 写）。
+A runnable bridging reference template is at [`examples/douyin_signature_bridge.py`](../examples/douyin_signature_bridge.py) (written against F2's current actual API).
 
-## 为什么"桥接"而不是"Mirage 自己做"
+## Why "Bridge" Instead of "Mirage Doing It Itself"
 
-1. **从零逆向 = 无底洞**：抖音 a_bogus/msToken 用 ollvm 混淆 + VMP + 频繁改版，逆向成果生命周期常 < 数周，单兵维护追不动。
-2. **F2 已经在追**：专职维护 + 社区 + 随抖音改版更新——站在它肩膀上，别重造轮子。
-3. **属请求层，不属行为层**：Mirage 加固的是"像不像人"（行为层）；签名是 MediaCrawler 的请求层。Mirage 接管它会与上游强耦合、上游一改就崩。所以 Mirage **只给桥接模板 + 用 `mirage canary` 监测锚点/加固是否失配**，不接管。
+1. **Reverse-engineering from scratch = bottomless pit**: Douyin's a_bogus/msToken uses ollvm obfuscation + VMP + frequent changes; reverse-engineered results often have a lifespan of less than several weeks, and a solo maintainer can't keep up.
+2. **F2 is already keeping up**: dedicated maintenance + community + updates with Douyin changes—stand on its shoulders, don't reinvent the wheel.
+3. **Belongs to request layer, not behavior layer**: What Mirage hardens is "human-likeness" (behavior layer); the signature is MediaCrawler's request layer. If Mirage takes it over, it becomes tightly coupled with upstream and breaks when upstream changes. So Mirage **only provides a bridging template + uses `mirage canary` to monitor whether anchors/hardening are mismatched**, not taking over.
 
-## 维护现实（诚实，不打包票）
+## Maintenance Reality (Honest, No Guarantees)
 
-- 这一层**会**随抖音改版失效——这是签名反爬的天性，不是 bug。
-- 生存策略：**依赖 F2 上游 + `mirage canary` 定期离线体检 + 失效时等 F2 跟进**（或换 [Evil0ctal 的 API](https://github.com/Evil0ctal/Douyin_TikTok_Download_API)）。
-- 抖音反爬强度在所有平台里**最高**；只用小号、低频、随时准备失效。绝不承诺"永久可用"。
+- This layer **will** fail as Douyin changes—this is the nature of signature anti-crawling, not a bug.
+- Survival strategy: **rely on F2 upstream + `mirage canary` periodic offline health checks + wait for F2 to catch up when it fails** (or switch to [Evil0ctal's API](https://github.com/Evil0ctal/Douyin_TikTok_Download_API)).
+- Douyin's anti-crawling intensity is **the highest** among all platforms; only use burner accounts, low frequency, and always be ready for failure. Never promise "permanently available".
 
-## 小红书对比（签名层容易得多）
+## Comparison with Xiaohongshu (Much Easier Signature Layer)
 
-小红书的 `x-s` / `x-s-common` 签名比抖音**可控得多**：现成库 [`Spider_XHS`](https://github.com/cv-cat/Spider_XHS) / [`xhshow`](https://github.com/Cloxl/xhshow) 直接可用，维护成本远低于抖音。同样是"桥接现成库"而非自己逆向。
+Xiaohongshu's `x-s` / `x-s-common` signatures are **much more manageable** than Douyin's: ready-made libraries [`Spider_XHS`](https://github.com/cv-cat/Spider_XHS) / [`xhshow`](https://github.com/Cloxl/xhshow) work directly, with maintenance costs far lower than Douyin. Again, it's "bridging existing libraries" rather than reverse-engineering yourself.
 
-## 一句话
+## In One Sentence
 
-**抖音签名四重门从零逆向必死；正解是桥接 F2（Apache-2.0，已解决全部四门）+ curl_cffi 补 JA3，Mirage 给正确模板 + canary 监测，不接管、不自造。**
+**Douyin's signature four gates are fatal to reverse-engineer from scratch; the correct solution is bridging F2 (Apache-2.0, already solves all four gates) + curl_cffi for JA3, with Mirage providing the correct template + canary monitoring, not taking over, not building its own.**

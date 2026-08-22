@@ -1,12 +1,12 @@
-## 改动说明
+## Change Description
 
-<!-- 改了什么、为什么 -->
+<!-- What was changed and why -->
 
-## 自检清单
-- [ ] `bash scripts/ci.sh` 全绿（pytest + ruff + mypy + benchmark 自检）
-- [ ] 没动功能标记 `[xhs-stealth]` / 备份后缀 `.xhs-stealth.bak`（改了会让已部署环境的 `--check`/`--revert` 失灵）
-- [ ] 涉及改写第三方源码的，走了 `write_py_safe`（原子写 + AST 校验 + 失败回滚）
-- [ ] 若加了会启动浏览器的脚本，保持"让用户手动跑、AI/CLI 不代跑"的铁律
-- [ ] 边界诚实：不承诺"100% 不被检测"（见 `docs/`）
+## Self-Check Checklist
+- [ ] `bash scripts/ci.sh` is fully green (pytest + ruff + mypy + benchmark self-check)
+- [ ] Did not touch feature markers `[xhs-stealth]` / backup suffix `.xhs-stealth.bak` (changing them would break `--check`/`--revert` in already deployed environments)
+- [ ] If third-party source code is rewritten, used `write_py_safe` (atomic write + AST validation + rollback on failure)
+- [ ] If adding a script that launches a browser, keep the iron rule of "let users run it manually; AI/CLI must not run it on their behalf"
+- [ ] Be honest about boundaries: do not promise "100% undetectable" (see `docs/`)
 
-> 合规：仅供学习研究；不加入破验证码 / 主号刷量等能力。
+> Compliance: for study and research only; do not add capabilities such as breaking CAPTCHAs / main-account volume farming.

@@ -1,50 +1,50 @@
-# 跨平台使用说明
+# Cross-Platform Usage Guide
 
-## 脚本兼容性一览
+## Script Compatibility Overview
 
-| 脚本 | Windows | macOS | Linux |
+| Script | Windows | macOS | Linux |
 |------|---------|-------|-------|
 | `apply_hardening.py` | ✅ | ✅ | ✅ |
 | `verify_stealth.py` | ✅ | ✅ | ✅ |
 | `human_interaction.py` | ✅ | ✅ | ✅ |
 | `weekly_maintenance.py` | ✅ | ✅ | ✅ |
-| `weekly_maintenance.sh` | ❌ 仅 bash | ✅ | ✅ |
+| `weekly_maintenance.sh` | ❌ Bash only | ✅ | ✅ |
 
-`apply_hardening.py` 只用 Python 标准库，**全平台零额外依赖**，任意系统直接运行。
+`apply_hardening.py` uses only the Python standard library, **zero extra dependencies across all platforms**, and runs directly on any system.
 
-## 各平台安装步骤
+## Installation Steps by Platform
 
-### 通用（所有平台）
+### General (All Platforms)
 
 ```bash
-# 1. 安装 Python 依赖（互动引擎/verify 需要 playwright）
+# 1. Install Python dependencies (Playwright is required for the interaction engine / verify)
 pip install -r requirements.txt
 
-# 2. 下载 Playwright 浏览器内核（仅一次）
+# 2. Download the Playwright browser runtime (once only)
 playwright install chromium
 ```
 
-### Windows 特别说明
+### Windows Notes
 
-- `weekly_maintenance.sh` 在 Windows 上**无法运行**，请改用 `weekly_maintenance.py`
-- 定时任务：用「任务计划程序」替代 cron，触发器选"每周一"，操作填：
+- `weekly_maintenance.sh` **cannot run on Windows**; use `weekly_maintenance.py` instead
+- Scheduled tasks: use "Task Scheduler" instead of cron, set the trigger to "Every Monday" and the action to:
   ```
   python C:\path\to\weekly_maintenance.py C:\path\to\MediaCrawler
   ```
-- 路径注意：`apply_hardening.py` 的 `<MediaCrawler根>` 参数支持 Windows 路径（含反斜杠）
+- Path note: the `<MediaCrawler root>` parameter of `apply_hardening.py` supports Windows paths (including backslashes)
 
 ### macOS / Linux
 
 ```bash
-# 定时维护（cron，每周一凌晨 3 点）
-# 任选其一：
+# Scheduled maintenance (cron, every Monday at 3:00 AM)
+# Choose one:
 0 3 * * 1 /bin/bash /path/to/weekly_maintenance.sh /path/to/MediaCrawler
 0 3 * * 1 python /path/to/weekly_maintenance.py /path/to/MediaCrawler
 ```
 
-### Linux 无头服务器
+### Linux Headless Server
 
-在无显示器的 Linux 服务器上运行 playwright，需要额外依赖：
+Running Playwright on a Linux server without a display requires additional dependencies:
 
 ```bash
 # Debian/Ubuntu
@@ -52,10 +52,10 @@ apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1
 playwright install --with-deps chromium
 ```
 
-## 常见问题
+## FAQ
 
-**Q: `apply_hardening.py` 改了文件，能撤销吗？**
-A: 可以，首次改动前会自动备份（`.xhs-stealth.bak`），执行 `python apply_hardening.py <root> --revert` 完整还原。
+**Q: `apply_hardening.py` modified files. Can it be reverted?**
+A: Yes. A backup (`.xhs-stealth.bak`) is automatically created before the first change. Run `python apply_hardening.py <root> --revert` to fully restore.
 
-**Q: Windows 上 playwright 报找不到 chromium？**
-A: 重新运行 `playwright install chromium`，确保在你运行脚本的同一个虚拟环境里执行。
+**Q: Playwright reports that Chromium cannot be found on Windows?**
+A: Run `playwright install chromium` again, making sure to do so in the same virtual environment where you run the script.

@@ -1,37 +1,36 @@
-# 海外平台：两层地图 + pacing 方法论 + Mirage 的边界
+# Overseas platforms: two-layer map + pacing methodology + Mirage's boundaries
 
-> 结论先行：海外平台**不在 MediaCrawler / Mirage 的加固范围**（不同框架、不同栈）。这篇是
-> 2026 实证的**指路牌 + 方法论**。核心分野：**公开内容用 yt-dlp（零账号风险、最稳）；
-> 要账号态的（X/IG/TikTok）才是难点，且它们全栽在同一处——请求节奏（pacing）**。
+> Conclusion first: overseas platforms are **outside MediaCrawler / Mirage's hardening scope** (different framework, different stack). This is a 2026 evidence-based **signpost + methodology**. Core divide: **public content via yt-dlp (zero account risk, most stable); account-state platforms (X/IG/TikTok) are where it gets hard, and they all fail at the same place—request pacing**.
 
-## 两层：先分清"要不要账号"
+## Two layers: first distinguish "account or not"
 
-| 层 | 平台 / 库 | 账号 | 封号风险 | 难度 |
+| Layer | Platform / library | Account | Ban risk | Difficulty |
 |----|-----------|------|---------|------|
-| **A 公开内容** | [yt-dlp](https://github.com/yt-dlp/yt-dlp)（YouTube + 1800 站，日更活跃）/ [gallery-dl](https://github.com/mikf/gallery-dl)（图集） | 不要 | 几乎无 | ✅ 直接用，最稳 |
-| **B 账号态** | [twscrape](https://github.com/vladkens/twscrape)(X) / [instaloader](https://github.com/instaloader/instaloader)(IG) / [TikTok-Api](https://github.com/davidteather/TikTok-Api)(TikTok) | 要 cookie / 账号 | **高** | ⚠️ 账号 + 代理 + pacing |
+| **A Public content** | [yt-dlp](https://github.com/yt-dlp/yt-dlp) (YouTube + 1800 sites, actively updated daily) / [gallery-dl](https://github.com/mikf/gallery-dl) (image galleries) | No | Almost none | ✅ Use directly, most stable |
+| **B Account-state** | [twscrape](https://github.com/vladkens/twscrape)(X) / [instaloader](https://github.com/instaloader/instaloader)(IG) / [TikTok-Api](https://github.com/davidteather/TikTok-Api)(TikTok) | Needs cookie / account | **High** | ⚠️ Account + proxy + pacing |
 
-**先问自己**：只要公开视频 / 图 → 层 A，yt-dlp 一把梭，别碰账号。要账号态数据（关注 / 私有 / 互动）→ 层 B，做好养号 + 重投入准备。
+**Ask yourself first**: if you only need public videos/images → layer A, yt-dlp all the way, don't touch accounts. If you need account-state data (following/private/interactions) → layer B, be ready for account warming + heavy investment.
 
-## 层 B 的真正难点：所有账号库都栽在 pacing
+## The real difficulty of layer B: every account library fails on pacing
 
-2026 实证——X / IG / TikTok 三家都在**同一处**卡人：
-- **X（twscrape）**：X 同时盯 IP 信誉 / 登录地理 / **请求节奏** / 跨账号模式；任一错 → 限流 / 影子封 / 永封。原话：*"撞限流后立刻轮换接着猛打，这个模式本身就是信号"* → 要**指数退避**，不是硬轮换。twscrape 内置限流处理 + 可选 **curl-cffi TLS 伪装**（和我们签名层同一招）。
-- **IG（instaloader）**：单 session，重用即触发封号；用户一直求"能自定义限流"（issue #1922）。
-- **TikTok（TikTok-Api）**：跑 Playwright + 要 ms_token（DevTools 里抓）+ 代理 + `sleep_after` 等 msToken 生成。**和抖音 App 同源**（ms_token）。
+2026 evidence — X / IG / TikTok all block people at the **same point**:
 
-**共性 = pacing 决定生死**：抖动间隔 + 每日配额 + 指数退避 + 熔断。这恰好是 Mirage 行为层 [`interaction_policy.py`](../scripts/interaction_policy.py) 已有的 L2/L3/L4 方法论——**可抽象成平台无关的 pacing 中间件**包在这些账号库外面（twscrape 已自带、instaloader 最缺）。
+- **X (twscrape)**: X simultaneously watches IP reputation / login geography / **request pacing** / cross-account patterns; any one wrong → rate limiting / shadow ban / permanent ban. Original quote: *"hitting a rate limit then immediately rotating and continuing to hammer is itself a signal"* → need **exponential backoff**, not hard rotation. twscrape has built-in rate-limit handling + optional **curl-cffi TLS impersonation** (same move as our signature layer).
+- **IG (instaloader)**: single session; reuse triggers bans; users keep asking for "custom rate limiting" (issue #1922).
+- **TikTok (TikTok-Api)**: runs Playwright + needs ms_token (grabbed from DevTools) + proxy + `sleep_after` and other msToken generation. **Same origin as Douyin App** (ms_token).
 
-## TLS 一致性（呼应签名层）
+**Common thread = pacing decides survival**: jittered intervals + daily quota + exponential backoff + circuit breaker. This is exactly the L2/L3/L4 methodology already in Mirage's behavior layer [`interaction_policy.py`](../scripts/interaction_policy.py)—**can be abstracted into platform-agnostic pacing middleware** wrapped around these account libraries (twscrape already has it built in; instaloader lacks it most).
 
-twscrape 用 **curl-cffi** 做 TLS 伪装——和 [`docs/tls-fingerprint.md`](tls-fingerprint.md) / [`docs/signature-layer.md`](signature-layer.md) 推荐的**完全同一招**。不管国内抖音还是海外 X，传输层 JA3 的解都是 curl_cffi。三个深坑（签名 / App / 海外）在这里收敛成一套方法论。
+## TLS consistency (echoing the signature layer)
 
-## Mirage 的边界
+twscrape uses **curl-cffi** for TLS impersonation—exactly the same approach recommended by [`docs/tls-fingerprint.md`](tls-fingerprint.md) / [`docs/signature-layer.md`](signature-layer.md). Whether domestic Douyin or overseas X, the transport-layer JA3 answer is curl_cffi. Three deep rabbit holes (signature / App / overseas) converge here into one methodology.
 
-- Mirage 加固网页版 MediaCrawler 行为层；海外是另一套库。**Mirage 不接管**。
-- 能借的是**方法论**：层 B 账号库怕封 → 用 Mirage 的 pacing 思路（抖动 / 配额 / 退避 / 熔断）+ 住宅代理 + 养号。
-- 能给的是**指路牌**：公开内容 yt-dlp、X twscrape、IG instaloader、TikTok TikTok-Api。
+## Mirage's boundaries
 
-## 一句话
+- Mirage hardens the web version of MediaCrawler's behavior layer; overseas platforms are a different set of libraries. **Mirage does not take over.**
+- What can be borrowed is the **methodology**: layer B account libraries fear bans → use Mirage's pacing approach (jitter / quota / backoff / circuit breaker) + residential proxy + account warming.
+- What Mirage can give is **signposts**: public content yt-dlp, X twscrape, IG instaloader, TikTok TikTok-Api.
 
-**海外两层：公开内容 yt-dlp 一把梭（零风险）；账号态 X/IG/TikTok 全栽在 pacing（抖动+配额+指数退避+熔断，和 Mirage 行为层同源）+ curl_cffi 补 TLS（和签名层同源）。Mirage 给指路牌 + 方法论，不接管。**
+## One-liner
+
+**Overseas two layers: public content = yt-dlp all the way (zero risk); account-state X/IG/TikTok all fail on pacing (jitter + quota + exponential backoff + circuit breaker, same origin as Mirage's behavior layer) + curl_cffi fills in TLS (same origin as the signature layer). Mirage provides signposts + methodology, does not take over.**

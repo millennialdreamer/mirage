@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-verify_stealth.py — 指纹自检：注入 stealth.min.js 后，读取关键自动化指纹，
-判断"像真人 / 像机器人"。
+verify_stealth.py — fingerprint self-check: after injecting stealth.min.js, read the key
+automation fingerprints and judge "human-like / bot-like".
 
-⚠️ 本脚本会启动一个真实浏览器窗口，请**自己手动运行**。
-   它是给你验证加固效果用的，不应由自动化代理代跑。
+⚠️ This script launches a real browser window; please **run it manually yourself**.
+   It is for you to verify the hardening effect, and should not be run by an automation proxy.
 
-用法：
+Usage:
     python verify_stealth.py --stealth ../libs/stealth.min.js
     python verify_stealth.py --stealth /path/to/stealth.min.js --headless
 
-依赖：playwright（pip install playwright && playwright install chromium）
+Dependency: playwright (pip install playwright && playwright install chromium)
 
-原理：用同一个浏览器开两个上下文 —— 一个**不注入** stealth（对照组），
-一个**注入** stealth（实验组），各读一遍指纹做对比。如果实验组的
-navigator.webdriver 从 true 变 undefined、plugins 从空变非空，就说明
-stealth 生效了。
+Principle: open two contexts with the same browser — one **without injecting** stealth (control group),
+one **with injecting** stealth (experimental group), and read fingerprints from each for comparison. If, in the experimental group,
+navigator.webdriver changes from true to undefined and plugins changes from empty to non-empty, it means
+stealth took effect.
 """
 
 import argparse
@@ -23,7 +23,7 @@ import asyncio
 import os
 import sys
 
-# 读取关键自动化指纹的 JS（自包含，不依赖任何外部检测页）
+# JS to read key automation fingerprints (self-contained, no external detection page)
 CHECK_JS = r"""() => {
   const out = {
     webdriver: navigator.webdriver,
@@ -44,7 +44,7 @@ CHECK_JS = r"""() => {
 
 
 async def probe(context, stealth_path):
-    """在给定 context 上（可选注入 stealth）开页读指纹。"""
+    """On the given context (optionally inject stealth), open a page and read fingerprints."""
     if stealth_path:
         await context.add_init_script(path=stealth_path)
     page = await context.new_page()
@@ -55,21 +55,21 @@ async def probe(context, stealth_path):
 
 
 def verdict(fp):
-    """根据指纹给出机器人嫌疑点列表（空列表 = 干净）。"""
+    """Return a list of robot suspicion points based on fingerprints (empty list = clean)."""
     flags = []
     if fp.get("webdriver"):
-        flags.append("navigator.webdriver = true  ← 头号机器人特征")
+        flags.append("navigator.webdriver = true  ← No.1 robot signature")
     if fp.get("plugins", 0) == 0:
-        flags.append("navigator.plugins 为空  ← 无头/自动化常见")
+        flags.append("navigator.plugins is empty  ← common in headless/automation")
     if not fp.get("hasChrome"):
-        flags.append("window.chrome 缺失  ← 非真实 Chrome 嫌疑")
+        flags.append("window.chrome missing  ← suspicion of not being real Chrome")
     return flags
 
 
 def show(title, fp):
-    print(f"\n  【{title}】")
+    print(f"\n  [{title}]")
     print(f"    navigator.webdriver : {fp.get('webdriver')}")
-    print(f"    navigator.plugins   : {fp.get('plugins')} 个")
+    print(f"    navigator.plugins   : {fp.get('plugins')} plugin(s)")
     print(f"    navigator.languages : {fp.get('languages')}")
     print(f"    window.chrome       : {fp.get('hasChrome')}")
     print(f"    permissions API     : {fp.get('permissionsApi')}")
@@ -79,7 +79,7 @@ def show(title, fp):
         for f in flags:
             print(f"    ⚠ {f}")
     else:
-        print("    ✓ 未发现明显机器人特征")
+        print("    ✓ No obvious robot signatures found")
     return flags
 
 
@@ -87,15 +87,15 @@ async def run(stealth_path, headless):
     try:
         from playwright.async_api import async_playwright
     except ImportError:
-        sys.exit("✗ 未安装 playwright。先跑：pip install playwright && playwright install chromium")
+        sys.exit("✗ playwright is not installed. Run first: pip install playwright && playwright install chromium")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
-        # 对照组：不注入
+        # Control group: no injection
         ctx_a = await browser.new_context()
         fp_plain = await probe(ctx_a, None)
         await ctx_a.close()
-        # 实验组：注入 stealth
+        # Experimental group: inject stealth
         ctx_b = await browser.new_context()
         fp_stealth = await probe(ctx_b, stealth_path)
         await ctx_b.close()
@@ -104,38 +104,39 @@ async def run(stealth_path, headless):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="注入 stealth 后的指纹自检（请手动运行）")
+    ap = argparse.ArgumentParser(description="Fingerprint self-check after injecting stealth (please run manually)")
     here = os.path.dirname(os.path.abspath(__file__))
     default_stealth = os.path.normpath(os.path.join(here, "..", "libs", "stealth.min.js"))
     ap.add_argument("--stealth", default=default_stealth,
-                    help=f"stealth.min.js 路径（默认 {default_stealth}）")
+                    help=f"Path to stealth.min.js (default {default_stealth})")
     ap.add_argument("--headless", action="store_true",
-                    help="无头模式运行（默认有窗口，便于你亲眼看）")
+                    help="Run in headless mode (default has a window so you can see it yourself)")
     args = ap.parse_args()
 
     if not os.path.isfile(args.stealth):
-        print(f"⚠ 找不到 stealth.min.js：{args.stealth}")
-        print("  实验组将退化为'不注入'，对比将无意义。请用 --stealth 指定正确路径。")
+        print(f"⚠ stealth.min.js not found: {args.stealth}")
+        print("  Test group falls back to 'no injection', so the comparison is meaningless.")
+        print("  Pass --stealth with the correct path.")
         stealth_path = None
     else:
         stealth_path = args.stealth
-        print(f"使用 stealth：{stealth_path}（{os.path.getsize(stealth_path)//1024}KB）")
+        print(f"Using stealth: {stealth_path} ({os.path.getsize(stealth_path)//1024}KB)")
 
-    print("启动浏览器自检中……（这是你手动发起的验证）")
+    print("Starting browser self-check... (this is a verification you initiated manually)")
     fp_plain, fp_stealth = asyncio.run(run(stealth_path, args.headless))
 
-    flags_plain = show("对照组 · 未注入 stealth", fp_plain)
-    flags_stealth = show("实验组 · 已注入 stealth", fp_stealth)
+    flags_plain = show("Control group · no stealth injected", fp_plain)
+    flags_stealth = show("Experimental group · stealth injected", fp_stealth)
 
-    print("\n═══ 结论 ═══")
+    print("\n═══ Conclusion ═══")
     if stealth_path and len(flags_stealth) < len(flags_plain):
-        print(f"  ✓ stealth 生效：机器人特征从 {len(flags_plain)} 项降到 {len(flags_stealth)} 项")
+        print(f"  ✓ stealth active: robot signatures reduced from {len(flags_plain)} to {len(flags_stealth)}")
     elif stealth_path and not flags_stealth:
-        print("  ✓ 实验组无机器人特征，stealth 工作正常")
+        print("  ✓ Experimental group has no robot signatures; stealth is working normally")
     elif not stealth_path:
-        print("  ? 未提供 stealth.min.js，无法对比")
+        print("  ? No stealth.min.js provided; cannot compare")
     else:
-        print("  ⚠ 注入后特征未减少，请检查 stealth.min.js 是否正确加载")
+        print("  ⚠ Signatures did not decrease after injection; check whether stealth.min.js is loaded correctly")
 
 
 if __name__ == "__main__":

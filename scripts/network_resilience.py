@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-network_resilience.py — Mirage 网络容错层。
+network_resilience.py — Mirage network resilience layer.
 
-提供三个能力：
-  1. **代理轮换**：从列表轮流取，失败标记冷却，全挂了触发告警而非崩溃。
-  2. **请求重试**：指数退避 + 随机抖动；区分「可重试网络错误」和「业务错误(不重试)」。
-  3. **弱网/超时熔断**：连续失败超阈值 → 进入熔断状态，拒绝后续请求，等待恢复。
+Provides three capabilities:
+  1. **Proxy rotation**: take turns from a list, mark failures with cooldown,
+     trigger an alert when all fail instead of crashing.
+  2. **Request retry**: exponential backoff + random jitter; distinguish
+     retryable network errors from business errors (no retry).
+  3. **Weak network / timeout circuit breaker**: consecutive failures exceed
+     threshold -> enter open state, reject subsequent requests, wait for recovery.
 
-设计原则：
-  - 纯标准库（asyncio/time/random/dataclasses 等），无额外依赖。
-  - async 友好：所有阻塞等待走 asyncio.sleep，可无缝配合 playwright/httpx。
-  - dry-run 友好：ProxyPool.demo() 不真连网就能演示轮换 + 冷却逻辑。
+Design principles:
+  - Pure standard library (asyncio/time/random/dataclasses etc.), no extra dependencies.
+  - async-friendly: all blocking waits use asyncio.sleep, can seamlessly cooperate
+    with playwright/httpx.
+  - dry-run friendly: ProxyPool.demo() demonstrates rotation + cooldown logic
+    without actually connecting.
 """
 
 import asyncio
@@ -24,39 +29,39 @@ from typing import Callable, List, Optional
 logger = logging.getLogger("mirage.network")
 
 # ─────────────────────────────────────────────────────────────────
-# 1. 代理池与轮换器
+# 1. Proxy pool and rotator
 # ─────────────────────────────────────────────────────────────────
 
 @dataclasses.dataclass
 class ProxyEntry:
-    url: str                          # 形如 "http://user:pass@host:port"
-    fail_count: int = 0               # 本次运行累计失败次数
-    cooldown_until: float = 0.0       # 冷却解除时间戳（0 = 未冷却）
+    url: str                          # e.g. "http://user:pass@host:port"
+    fail_count: int = 0               # cumulative failures this run
+    cooldown_until: float = 0.0       # cooldown release timestamp (0 = not cooling)
 
     def is_available(self) -> bool:
         return time.time() >= self.cooldown_until
 
     def mark_fail(self, cooldown_secs: float = 120.0):
-        """标记失败并进入冷却期（默认 2 分钟）。"""
+        """Mark failure and enter cooldown (default 2 minutes)."""
         self.fail_count += 1
         self.cooldown_until = time.time() + cooldown_secs
-        logger.warning("代理失败：%s（冷却 %.0fs，累计失败 %d 次）",
+        logger.warning("Proxy failed: %s (cooldown %.0fs, cumulative failures %d)",
                        self.url, cooldown_secs, self.fail_count)
 
     def mark_ok(self):
-        """成功后清零失败记录，解除冷却。"""
+        """On success clear failure record and lift cooldown."""
         self.fail_count = 0
         self.cooldown_until = 0.0
 
 
 class ProxyPool:
     """
-    轮换式代理池。
+    Rotating proxy pool.
 
-    用法::
+    Usage::
 
         pool = ProxyPool(["http://p1:1080", "http://p2:1080"])
-        proxy = pool.next()          # 取下一个可用代理，全挂了返回 None
+        proxy = pool.next()          # get next available proxy, None if all down
         pool.mark_fail(proxy)
         pool.mark_ok(proxy)
     """
@@ -64,12 +69,12 @@ class ProxyPool:
     def __init__(self, proxy_urls: List[str], cooldown_secs: float = 120.0):
         self.entries = [ProxyEntry(u) for u in proxy_urls]
         self.cooldown_secs = cooldown_secs
-        self._idx = 0                 # 轮询游标
+        self._idx = 0                 # round-robin cursor
 
     def next(self) -> Optional[str]:
         """
-        返回下一个可用代理 URL，或 None（全部在冷却/列表为空）。
-        采用轮询（Round-Robin）跳过冷却中的代理。
+        Return the next available proxy URL, or None (all cooling down / list empty).
+        Uses round-robin to skip cooling proxies.
         """
         if not self.entries:
             return None
@@ -79,8 +84,8 @@ class ProxyPool:
             self._idx += 1
             if entry.is_available():
                 return entry.url
-        # 全部在冷却
-        logger.error("代理池耗尽：所有 %d 个代理均在冷却，当前无可用代理", n)
+        # all cooling down
+        logger.error("Proxy pool exhausted: all %d proxies are cooling down; no proxy available", n)
         return None
 
     def mark_fail(self, url: str):
@@ -99,40 +104,41 @@ class ProxyPool:
         lines = []
         for e in self.entries:
             cd = e.cooldown_until - time.time()
-            state = f"冷却剩余 {cd:.0f}s" if cd > 0 else "可用"
-            lines.append(f"  {e.url}  [{state}，失败 {e.fail_count} 次]")
-        return "\n".join(lines) or "（无代理）"
+            state = f"cooldown remaining {cd:.0f}s" if cd > 0 else "available"
+            lines.append(f"  {e.url}  [{state}, failures {e.fail_count}]")
+        return "\n".join(lines) or "(no proxy)"
 
     @classmethod
     def demo(cls):
-        """不真连网，演示轮换 + 冷却逻辑。"""
-        print("=== ProxyPool 演示 ===")
+        """Demonstrate rotation + cooldown logic without real network access."""
+        print("=== ProxyPool demo ===")
         pool = cls(["http://p1:1080", "http://p2:1080", "http://p3:1080"],
                    cooldown_secs=5.0)
-        # 依次取
+        # take in sequence
         for i in range(5):
             p = pool.next()
-            print(f"  第{i+1}次取: {p}")
-        # 让 p1、p2 失败
+            print(f"  attempt {i+1}: {p}")
+        # mark p1 and p2 as failed
         pool.mark_fail("http://p1:1080")
         pool.mark_fail("http://p2:1080")
-        print("标记 p1/p2 失败后：")
+        print("After marking p1/p2 as failed:")
         print(pool.status())
         p = pool.next()
-        print(f"  现在取到: {p}")  # 应该是 p3
-        print("=== 演示结束 ===")
+        print(f"  now got: {p}")  # should be p3
+        print("=== demo end ===")
 
 
 # ─────────────────────────────────────────────────────────────────
-# 2. 可重试 vs 不可重试错误分类
+# 2. Retryable vs non-retryable error classification
 # ─────────────────────────────────────────────────────────────────
 
 class RetryPolicy(Enum):
-    RETRYABLE = "retryable"        # 网络层错误，可重试（超时/连接断/503 等）
-    NOT_RETRYABLE = "not_retryable"  # 业务层错误，重试也没用（4xx/内容异常等）
+    RETRYABLE = "retryable"        # network-layer error, retryable (timeout/connection reset/503 etc.)
+    NOT_RETRYABLE = "not_retryable"  # business-layer error, retry won't help (4xx/content issues etc.)
 
 
-# 把常见异常关键词映射到策略（字符串匹配，兼容 playwright/httpx/requests 各类异常）
+# Map common exception keywords to policy (string matching, compatible with
+# playwright/httpx/requests exceptions)
 _RETRYABLE_PATTERNS = [
     "timeout", "timed out", "connection", "reset", "broken pipe",
     "eof", "503", "502", "429", "too many requests", "network", "unreachable",
@@ -145,17 +151,17 @@ _NOT_RETRYABLE_PATTERNS = [
 
 
 def classify_error(exc: Exception) -> RetryPolicy:
-    """根据异常类型 / 错误信息判断是否可重试。"""
+    """Determine whether the error is retryable based on exception type / message."""
     msg = str(exc).lower()
     if any(p in msg for p in _NOT_RETRYABLE_PATTERNS):
         return RetryPolicy.NOT_RETRYABLE
     if any(p in msg for p in _RETRYABLE_PATTERNS):
         return RetryPolicy.RETRYABLE
-    return RetryPolicy.RETRYABLE  # 未知错误保守当可重试
+    return RetryPolicy.RETRYABLE  # unknown errors conservatively treated as retryable
 
 
 # ─────────────────────────────────────────────────────────────────
-# 3. 指数退避重试（async）
+# 3. Exponential backoff retry (async)
 # ─────────────────────────────────────────────────────────────────
 
 async def retry_async(
@@ -169,17 +175,17 @@ async def retry_async(
     **kwargs,
 ):
     """
-    指数退避 + 随机抖动重试包装。
+    Exponential backoff + random jitter retry wrapper.
 
-    参数：
-        fn           — async 可调用目标
-        max_retries  — 最多重试次数（不含首次）
-        base_delay   — 首次等待秒数（每次 ×2）
-        max_delay    — 单次最长等待秒数
-        jitter       — 在退避时间上叠加的随机抖动比例（0.3 = ±30%）
-        on_retry     — 每次重试前的回调（接收 attempt, exc, delay）
+    Args:
+        fn           — async callable target
+        max_retries  — maximum retry count (excluding the first attempt)
+        base_delay   — first wait seconds (doubles each time)
+        max_delay    — maximum single wait seconds
+        jitter       — random jitter ratio applied to backoff (0.3 = ±30%)
+        on_retry     — callback before each retry (receives attempt, exc, delay)
 
-    可重试错误 → 等待后重试；不可重试错误 → 立刻抛出。
+    Retryable error → wait then retry; non-retryable error → raise immediately.
     """
     last_exc = None
     for attempt in range(max_retries + 1):
@@ -188,15 +194,15 @@ async def retry_async(
         except Exception as exc:
             policy = classify_error(exc)
             if policy == RetryPolicy.NOT_RETRYABLE:
-                logger.warning("不可重试错误（业务层），直接放弃：%s", exc)
+                logger.warning("Non-retryable error (business layer), giving up: %s", exc)
                 raise
             last_exc = exc
             if attempt >= max_retries:
                 break
-            # 指数退避 + 抖动
+            # exponential backoff + jitter
             delay = min(base_delay * (2 ** attempt), max_delay)
             delay *= random.uniform(1 - jitter, 1 + jitter)
-            logger.info("网络错误（第 %d/%d 次重试，等待 %.1fs）：%s",
+            logger.info("Network error (retry %d/%d, waiting %.1fs): %s",
                         attempt + 1, max_retries, delay, exc)
             if on_retry:
                 on_retry(attempt + 1, exc, delay)
@@ -205,35 +211,35 @@ async def retry_async(
 
 
 # ─────────────────────────────────────────────────────────────────
-# 4. 弱网熔断器（Circuit Breaker）
+# 4. Weak network circuit breaker
 # ─────────────────────────────────────────────────────────────────
 
 class CircuitState(Enum):
-    CLOSED = "closed"        # 正常通行
-    OPEN = "open"            # 熔断中，拒绝请求
-    HALF_OPEN = "half_open"  # 试探恢复
+    CLOSED = "closed"        # normal traffic
+    OPEN = "open"            # open, rejecting requests
+    HALF_OPEN = "half_open"  # probing recovery
 
 
 class CircuitBreakerOpen(Exception):
-    """熔断器打开时，外部调用方收到此异常，应立即停止当前 session。"""
+    """Raised when the circuit breaker is open; callers should immediately stop the current session."""
 
 
 class CircuitBreaker:
     """
-    简单三态熔断器。
+    Simple three-state circuit breaker.
 
-    连续失败 failure_threshold 次 → 进入 OPEN（熔断），
-    等待 recovery_secs 后进入 HALF_OPEN（试探），
-    试探成功 → CLOSED，试探失败 → 重新 OPEN。
+    Consecutive failures reach failure_threshold -> enter OPEN (tripped),
+    after recovery_secs enter HALF_OPEN (probe),
+    probe succeeds -> CLOSED, probe fails -> re-OPEN.
 
-    用法::
+    Usage::
 
         cb = CircuitBreaker()
         try:
             async with cb:
                 await do_request()
         except CircuitBreakerOpen:
-            print("熔断中，停止发请求")
+            print("circuit open, stop sending requests")
     """
 
     def __init__(self, failure_threshold: int = 5, recovery_secs: float = 60.0):
@@ -248,94 +254,94 @@ class CircuitBreaker:
         if self._state == CircuitState.OPEN:
             if time.time() - self._opened_at >= self.recovery_secs:
                 self._state = CircuitState.HALF_OPEN
-                logger.info("熔断恢复探测期（HALF_OPEN）")
+                logger.info("Circuit breaker recovery probe period (HALF_OPEN)")
         return self._state
 
     async def __aenter__(self):
         s = self.state
         if s == CircuitState.OPEN:
             raise CircuitBreakerOpen(
-                f"网络熔断中（已连续失败 {self.failure_threshold} 次），"
-                f"等待 {self.recovery_secs:.0f}s 后自动恢复探测"
+                f"Network circuit breaker open (failed {self.failure_threshold} consecutive times), "
+                f"waiting {self.recovery_secs:.0f}s before automatic recovery probe"
             )
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         if exc_type is None:
-            # 成功
+            # success
             self._fail_count = 0
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.CLOSED
-                logger.info("探测成功，熔断器关闭（CLOSED）")
+                logger.info("Probe succeeded, circuit breaker closed (CLOSED)")
         elif exc_type is not CircuitBreakerOpen:
-            # 失败
+            # failure
             self._fail_count += 1
-            logger.warning("熔断器计数 %d/%d，错误：%s",
+            logger.warning("Circuit breaker count %d/%d, error: %s",
                            self._fail_count, self.failure_threshold, exc)
             if self._fail_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
                 self._opened_at = time.time()
-                logger.error("🛑 熔断器触发！连续失败 %d 次，进入 OPEN 状态，"
-                             "%.0fs 后试探恢复", self._fail_count, self.recovery_secs)
-        return False  # 不吞异常，让调用方自己处理
+                logger.error("🛑 Circuit breaker tripped! %d consecutive failures, entering OPEN state, "
+                             "probing recovery in %.0fs", self._fail_count, self.recovery_secs)
+        return False  # do not swallow exceptions; let the caller handle them
 
     def status(self) -> str:
         s = self.state
         if s == CircuitState.OPEN:
             remaining = self.recovery_secs - (time.time() - self._opened_at)
-            return f"OPEN（剩余冷却 {remaining:.0f}s，失败计数 {self._fail_count}）"
-        return f"{s.value}（失败计数 {self._fail_count}/{self.failure_threshold}）"
+            return f"OPEN (cooldown remaining {remaining:.0f}s, failure count {self._fail_count})"
+        return f"{s.value} (failure count {self._fail_count}/{self.failure_threshold})"
 
 
 # ─────────────────────────────────────────────────────────────────
-# 5. 便捷演示入口（不真连网）
+# 5. Convenience demo entry (no real network)
 # ─────────────────────────────────────────────────────────────────
 
 async def _demo_retry():
-    """演示：重试逻辑（每次都失败，看退避时序）。"""
-    print("\n=== retry_async 演示（指数退避，max_retries=3）===")
+    """Demo: retry logic (fails every time, observe backoff timing)."""
+    print("\n=== retry_async demo (exponential backoff, max_retries=3) ===")
     call_times = []
 
     async def always_fail():
         call_times.append(time.time())
-        raise ConnectionError("模拟网络超时 timeout")
+        raise ConnectionError("simulated network timeout")
 
     try:
         await retry_async(always_fail, max_retries=3, base_delay=0.5,
-                          on_retry=lambda n, e, d: print(f"  → 第{n}次重试，等待 {d:.2f}s"))
+                          on_retry=lambda n, e, d: print(f"  → retry #{n}, waiting {d:.2f}s"))
     except ConnectionError as e:
-        print(f"  最终失败：{e}")
+        print(f"  final failure: {e}")
     gaps = [call_times[i+1] - call_times[i] for i in range(len(call_times)-1)]
-    print(f"  实际等待间隔（秒）：{[f'{g:.2f}' for g in gaps]}")
-    print("=== 演示结束 ===")
+    print(f"  actual wait intervals (seconds): {[f'{g:.2f}' for g in gaps]}")
+    print("=== demo end ===")
 
 
 async def _demo_circuit_breaker():
-    """演示：熔断器触发与恢复。"""
-    print("\n=== CircuitBreaker 演示（threshold=3）===")
+    """Demo: circuit breaker trip and recovery."""
+    print("\n=== CircuitBreaker demo (threshold=3) ===")
     cb = CircuitBreaker(failure_threshold=3, recovery_secs=3.0)
 
     async def fail_request():
-        raise ConnectionError("模拟网络断开")
+        raise ConnectionError("simulated network disconnected")
 
     for i in range(5):
         try:
             async with cb:
                 await fail_request()
         except CircuitBreakerOpen as e:
-            print(f"  第{i+1}次：熔断拒绝 → {e}")
+            print(f"  attempt {i+1}: rejected by circuit breaker → {e}")
             break
         except ConnectionError:
-            print(f"  第{i+1}次：失败 | 状态：{cb.status()}")
+            print(f"  attempt {i+1}: failure | status: {cb.status()}")
 
-    print("  等待 3s 后自动进入 HALF_OPEN…")
+    print("  waiting 3s to enter HALF_OPEN automatically…")
     await asyncio.sleep(3.1)
-    print(f"  当前状态：{cb.status()}")
-    print("=== 演示结束 ===")
+    print(f"  current status: {cb.status()}")
+    print("=== demo end ===")
 
 
 async def demo():
-    """一键运行所有演示（dry-run，不真连网）。"""
+    """Run all demos at once (dry-run, no real network)."""
     ProxyPool.demo()
     await _demo_retry()
     await _demo_circuit_breaker()

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-weekly_maintenance.py — MediaCrawler 每周自动维护（跨平台 Python 版）
+weekly_maintenance.py — MediaCrawler weekly automatic maintenance (cross-platform Python version)
 
-功能与 weekly_maintenance.sh 完全一致，但 Windows/Mac/Linux 均可运行：
-  1. 从上游拉最新 stealth.min.js（反检测指纹库会随浏览器更新而过时）
-  2. 检查上游 MediaCrawler 是否有新提交（仅提醒，不自动合并）
+Functionality is exactly the same as weekly_maintenance.sh, but runs on Windows/Mac/Linux:
+  1. Pull latest stealth.min.js from upstream (anti-detection fingerprint library goes stale as browsers update)
+  2. Check upstream MediaCrawler for new commits (reminder only, no auto merge)
 
-用法：
+Usage:
   python scripts/weekly_maintenance.py /path/to/MediaCrawler
-  python scripts/weekly_maintenance.py          # 部署到 tools/ 下时自动推断根目录
+  python scripts/weekly_maintenance.py          # When deployed under tools/, root is inferred automatically
 
-建议挂到定时任务（每周一凌晨 3 点）：
-  # Mac/Linux cron：
+Suggested schedule (Monday 3 AM):
+  # Mac/Linux cron:
   0 3 * * 1 python /path/to/weekly_maintenance.py /path/to/MediaCrawler
-  # Windows 任务计划程序：同样的命令
+  # Windows Task Scheduler: same command
 """
 
 import os
@@ -30,44 +30,44 @@ STEALTH_URL = (
 
 
 def locate_root(argv):
-    """定位 MediaCrawler 根目录：优先用命令行参数，否则推断（假设脚本在 tools/ 下）。"""
+    """Locate MediaCrawler root: prefer CLI arg, otherwise infer (assumes script is under tools/)."""
     if len(argv) > 1:
         return os.path.abspath(argv[1])
-    # 无参数：假设本脚本部署在 <root>/tools/ 下，取上级目录
+    # No args: assume this script is deployed under <root>/tools/, take parent dir
     here = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(here, ".."))
 
 
 def validate_root(root):
-    """确认是 MediaCrawler 安装。"""
+    """Confirm it's a MediaCrawler installation."""
     marker = os.path.join(root, "config", "base_config.py")
     if not os.path.isfile(marker):
-        print(f"✗ {root} 不像 MediaCrawler 安装（缺 config/base_config.py）")
-        print("  用法：python weekly_maintenance.py /path/to/MediaCrawler")
+        print(f"✗ {root} doesn't look like a MediaCrawler installation (missing config/base_config.py)")
+        print("  Usage: python weekly_maintenance.py /path/to/MediaCrawler")
         sys.exit(1)
 
 
 def update_stealth(root, log):
-    """下载最新 stealth.min.js，校验后原子覆盖。"""
+    """Download latest stealth.min.js, validate then atomically replace."""
     dst = os.path.join(root, "libs", "stealth.min.js")
     tmp = dst + ".tmp"
-    _log(log, "[stealth] 从上游下载…")
+    _log(log, "[stealth] Downloading from upstream...")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     try:
         with urllib.request.urlopen(STEALTH_URL, timeout=30) as resp:
             data = resp.read()
-        # 校验：非空且含 stealth 特征串，才覆盖
+        # Validate: only overwrite if non-empty and contains stealth signature string
         if len(data) > 1000 and b"webdriver" in data:
             with open(tmp, "wb") as f:
                 f.write(data)
-            os.replace(tmp, dst)   # 原子替换，防中断损坏
-            _log(log, f"[stealth] ✓ 更新成功 ({len(data)} bytes)")
+            os.replace(tmp, dst)   # Atomic replace to avoid corruption from interruption
+            _log(log, f"[stealth] ✓ Update succeeded ({len(data)} bytes)")
         else:
-            _log(log, "[stealth] ⚠ 下载内容异常，保留原版本")
+            _log(log, "[stealth] ⚠ Downloaded content abnormal, keeping existing version")
             if os.path.exists(tmp):
                 os.remove(tmp)
     except Exception as e:
-        _log(log, f"[stealth] ⚠ 下载失败（{e}），保留原版本")
+        _log(log, f"[stealth] ⚠ Download failed ({e}), keeping existing version")
         if os.path.exists(tmp):
             try:
                 os.remove(tmp)
@@ -76,11 +76,11 @@ def update_stealth(root, log):
 
 
 def check_upstream(root, log):
-    """检查上游是否有新提交，仅提醒不自动合并。"""
-    _log(log, "[upstream] 检查 GitHub 最新状态…")
+    """Check upstream for new commits; reminder only, no auto-merge."""
+    _log(log, "[upstream] Checking latest GitHub status...")
     git_dir = os.path.join(root, ".git")
     if not os.path.isdir(git_dir):
-        _log(log, "[upstream] ⚠ 非 git 仓库，跳过")
+        _log(log, "[upstream] ⚠ Not a git repository, skipping")
         return
 
     def _run(cmd):
@@ -91,14 +91,14 @@ def check_upstream(root, log):
     # fetch origin
     r = _run(["git", "fetch", "origin", "--quiet"])
     if r.returncode != 0:
-        _log(log, f"[upstream] ⚠ git fetch 失败：{r.stderr.strip()}")
+        _log(log, f"[upstream] ⚠ git fetch failed: {r.stderr.strip()}")
         return
 
-    # 当前分支名
+    # Current branch name
     r_branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
     branch = r_branch.stdout.strip() if r_branch.returncode == 0 else "main"
 
-    # 落后提交数
+    # Number of commits behind
     r_count = _run(["git", "rev-list", f"HEAD..origin/{branch}", "--count"])
     try:
         behind = int(r_count.stdout.strip())
@@ -106,20 +106,20 @@ def check_upstream(root, log):
         behind = 0
 
     if behind > 0:
-        _log(log, f"[upstream] ⚠ 上游有 {behind} 个新提交，可能含反检测修复")
+        _log(log, f"[upstream] ⚠ Upstream has {behind} new commit(s), may contain anti-detection fixes")
         r_log = _run(["git", "log", f"origin/{branch}", "--oneline", "-5"])
         if r_log.returncode == 0:
             for line in r_log.stdout.strip().splitlines():
                 _log(log, f"[upstream]   {line}")
-        _log(log, "[upstream]   合并前先备份加固：apply_hardening.py <root> --revert 后再 git pull 再重打")
-        # macOS 桌面通知（非 macOS 自动忽略）
-        _notify(f"MediaCrawler 上游有 {behind} 个新提交", "小红书爬虫维护")
+        _log(log, "[upstream]   Before merging, back up hardening first: apply_hardening.py <root> --revert, then git pull, then re-apply")
+        # macOS desktop notification (silently ignored on non-macOS)
+        _notify(f"MediaCrawler upstream has {behind} new commits", "Xiaohongshu crawler maintenance")
     else:
-        _log(log, "[upstream] ✓ 已是最新")
+        _log(log, "[upstream] ✓ Already up to date")
 
 
 def _log(log_path, msg):
-    """同时打印到终端和日志文件。"""
+    """Print to both terminal and log file."""
     print(msg)
     try:
         with open(log_path, "a", encoding="utf-8") as f:
@@ -129,7 +129,7 @@ def _log(log_path, msg):
 
 
 def _notify(message, title):
-    """macOS 桌面通知，非 macOS 静默忽略。"""
+    """macOS desktop notification, silently ignored on non-macOS."""
     if sys.platform != "darwin":
         return
     try:
@@ -148,12 +148,12 @@ def main():
 
     log_path = os.path.join(root, "maintenance.log")
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-    _log(log_path, f"=== {ts} 周维护开始 ({root}) ===")
+    _log(log_path, f"=== {ts} weekly maintenance start ({root}) ===")
 
     update_stealth(root, log_path)
     check_upstream(root, log_path)
 
-    _log(log_path, "=== 维护完成 ===")
+    _log(log_path, "=== Maintenance complete ===")
     _log(log_path, "")
 
 
