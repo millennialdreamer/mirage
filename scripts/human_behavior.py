@@ -57,24 +57,39 @@ async def human_mouse_move(page, x, y, start=(None, None), steps=None):
     for bx, by in _bezier_path(x0, y0, x, y, steps):
         await page.mouse.move(bx + random.uniform(-1.5, 1.5),
                               by + random.uniform(-1.5, 1.5))
-        await asyncio.sleep(random.uniform(0.012, 0.03))  # 步间隔，模拟手速
+        # 步间隔也走右偏分布：真人手速有快有慢、偶有微顿，均匀步时同样是可统计的破绽
+        await asyncio.sleep(human_delay(0.019, sigma=0.35, lo=0.5, hi=2.6))
     return (x, y)
 
 
-async def human_sleep(base_sec: float, lo: float = 0.7, hi: float = 1.6) -> None:
-    """带抖动的睡眠，且约 15% 概率出现"长停顿"（真人分心/阅读），贴近对数正态形态。
+def human_delay(base_sec: float, sigma: float = 0.45,
+                lo: float = 0.55, hi: float = 3.5) -> float:
+    """返回一个**右偏（对数正态）**的时长：中位数 = base_sec，多数略短、偶尔明显长。
 
-    例：base=6 → 多数 4.2~9.6s，偶尔 9.6~18s。消除均匀分布这一可统计特征。
+    为什么不用 random.uniform：真人的时间间隔天然右偏（大量短间隔 + 少量长尾），
+    而均匀分布的直方图是**平顶矩形**——这在统计上一眼假，KS 检验能直接把它和人类区分开。
+    以前这里用"85% 短均匀 + 15% 长均匀"近似，直方图是两个矩形，仍可被检出；
+    现在直接采样对数正态，形状是真的平滑右偏曲线。
+
+    lo/hi 是相对 base 的软钳位（防极端值），不改变主体形状。
     """
-    if random.random() < 0.15:
-        await asyncio.sleep(random.uniform(base_sec * hi, base_sec * 3.0))
-    else:
-        await asyncio.sleep(random.uniform(base_sec * lo, base_sec * hi))
+    d = base_sec * random.lognormvariate(0, sigma)
+    return max(base_sec * lo, min(base_sec * hi, d))
+
+
+async def human_sleep(base_sec: float, lo: float = 0.7, hi: float = 1.6) -> None:
+    """带右偏抖动的睡眠（对数正态）。lo/hi 为软钳位边界，长尾可超过 hi。
+
+    例：base=6 → 中位 6s，多数 4~9s，偶尔十几秒（真人分心/阅读）。
+    """
+    await asyncio.sleep(human_delay(base_sec, sigma=0.45, lo=lo * 0.8, hi=hi * 2.2))
 
 
 async def warmup(min_sec: float = 3.0, max_sec: float = 8.0) -> None:
     """首次动作前的"热身停顿"。真人打开页面会先看几秒，机器人会立刻开搜。"""
-    await asyncio.sleep(random.uniform(min_sec, max_sec))
+    mid = (min_sec + max_sec) / 2                    # 以区间中点为中位数，右偏采样
+    await asyncio.sleep(human_delay(mid, sigma=0.40,
+                                    lo=min_sec / mid, hi=max_sec * 1.8 / mid))
 
 
 async def simulate_page_activity(page) -> None:

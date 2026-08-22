@@ -247,7 +247,7 @@ def patch_cdp_browser(path, dry):
 # ════════════════════════════════════════════════════════════════════
 WARMUP_BLOCK = '''        # [xhs-stealth] L4: human warm-up — pause on the page before the first search
         import random as _rnd, asyncio as _aio
-        _warm = _rnd.uniform(3.0, 8.0)
+        _warm = max(2.5, min(16.0, 5.5 * _rnd.lognormvariate(0, 0.40)))  # 右偏,非均匀
         await _aio.sleep(_warm)
 '''
 
@@ -271,10 +271,11 @@ HUMAN_METHOD = '''
             await _aio.sleep(_rnd.uniform(0.4, 1.0))
             _x, _y = _rnd.randint(200, 900), _rnd.randint(200, 500)
             for _i in range(1, 11):
-                _t = _i / 10
+                _u = _i / 10
+                _t = _u * _u * (3 - 2 * _u)      # 缓入缓出，避免直线匀速(匀速=机器人)
                 await page.mouse.move(_x * _t + _rnd.uniform(-2, 2),
                                       _y * _t + _rnd.uniform(-2, 2))
-                await _aio.sleep(_rnd.uniform(0.012, 0.03))
+                await _aio.sleep(0.019 * _rnd.lognormvariate(0, 0.35))
         except Exception:
             pass
 '''
@@ -326,8 +327,11 @@ def patch_core(path, dry, platform="xhs"):
     )
     def _jitter(m):
         indent, expr = m.group(1), m.group(2)
-        return (f"{indent}await asyncio.sleep(random.uniform("
-                f"{expr} * 0.7, {expr} * 1.6))  # {MARK} L2 jitter")
+        # 用对数正态（右偏）而非 uniform：真人间隔是"大量短 + 少量长尾"，
+        # uniform 的直方图是平顶矩形，KS 检验能直接识别。lognormvariate(0,σ) 中位数=1，
+        # 故 expr * lognormvariate(0,0.45) 的中位数就是原间隔，但形状是真的右偏曲线。
+        return (f"{indent}await asyncio.sleep({expr} * "
+                f"random.lognormvariate(0, 0.45))  # {MARK} L2 jitter")
     n_sleep = len(sleep_pat.findall(text))
     if n_sleep:
         text = sleep_pat.sub(_jitter, text)
@@ -382,7 +386,9 @@ def patch_core(path, dry, platform="xhs"):
             next_def = re.search(r"^    (?:async )?def ", rest, re.MULTILINE)
             seg_end = search_m.end() + (next_def.start() if next_def else len(rest))
             seg = text[search_m.end():seg_end]
-            cm = re.search(r"^(\s*)await asyncio\.sleep\(random\.uniform\([^\n]*L2 jitter",
+            # 放宽：只认 sleep 行 + L2 jitter 标记，不锁定具体分布函数名
+            # （既匹配新的 lognormvariate 形式，也兼容已部署的老 uniform 形式）
+            cm = re.search(r"^(\s*)await asyncio\.sleep\([^\n]*L2 jitter",
                            seg, re.MULTILINE)
             if cm:
                 call_indent = cm.group(1)
