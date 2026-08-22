@@ -69,6 +69,32 @@ fi
 '''
 
 
+def _profile(seed, emit):
+    """设备画像：一致性 > 单值伪装。所有注入值从同一张画像派生，避免自相矛盾。"""
+    try:
+        from device_profile import DeviceProfile
+    except ImportError:
+        from mirage.device_profile import DeviceProfile
+    p = DeviceProfile.from_seed(seed)
+    print("\n" + p.summary())
+    problems = p.check()
+    if problems:
+        print("\n  ✗ 自洽校验发现矛盾：")
+        for x in problems:
+            print(f"    - {x}")
+    else:
+        print("\n  ✓ 自洽校验通过：UA / platform / GPU / 语言 / 时区 互不矛盾")
+    if emit:
+        path = os.path.abspath(os.path.expanduser(emit))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(p.to_init_script())
+        print(f"\n  注入脚本已写出：{path}")
+        print("  用法：await context.add_init_script(path=<该文件>)  （或 script=文件内容）")
+    print("\n  ⚠ 注入层天花板：挡不住 TLS/JA3、worker realm 对拍、toString 审计——"
+          "对静态检测有效(约7-8成)，对 CreepJS 主动对拍封顶约 4-5 成。详见 scripts/device_profile.py 头部说明。")
+    return 0
+
+
 def _radar(account, do_reset):
     """软封杀预警面板：看趋势判断当前是否正在被降权。"""
     try:
@@ -154,6 +180,9 @@ def main(argv=None):
     pgi.add_argument("path", help="MediaCrawler 安装根目录（git 仓库）")
     pgu = sub.add_parser("guard-uninstall", help="卸载 guard hook")
     pgu.add_argument("path", help="MediaCrawler 安装根目录")
+    pp = sub.add_parser("profile", help="设备画像：生成自洽指纹画像 + 校验矛盾 + 导出注入脚本")
+    pp.add_argument("seed", help="种子（同种子永远得到同一套画像；建议一个账号一个种子）")
+    pp.add_argument("--emit", metavar="PATH", default="", help="把注入 JS 写到文件（供 add_init_script 用）")
     pr = sub.add_parser("radar", help="软封杀预警：看当前是否正在被降权（趋势判断）")
     pr.add_argument("--account", default="default", help="账号标识（不同账号分别建基线）")
     pr.add_argument("--reset", action="store_true", help="清空该账号基线（换号/换 IP 后用）")
@@ -172,6 +201,8 @@ def main(argv=None):
         return apply_hardening.main(passthru)
     if args.cmd == "canary":
         return apply_hardening.main([args.path, "-p", args.platform, "--canary"])
+    if args.cmd == "profile":
+        return _profile(args.seed, args.emit)
     if args.cmd == "radar":
         return _radar(args.account, args.reset)
     if args.cmd == "guard-install":

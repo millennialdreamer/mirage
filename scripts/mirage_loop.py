@@ -11,6 +11,7 @@ mirage_loop.py — Mirage 终极版「拟人刷号」主循环。
 """
 
 import asyncio
+import inspect
 import random
 import time
 
@@ -63,10 +64,16 @@ DANGER_DIALOG_SEL = ["[role=dialog]", ".reds-dialog", ".verify-dialog",
 class MirageLoop:
     def __init__(self, page, dry_run=True, interact_prob=0.15,
                  conservative=False, max_minutes=30,
-                 platform_tz="Asia/Shanghai"):
+                 platform_tz="Asia/Shanghai", on_captcha=None):
         """
         platform_tz — 目标平台所在时区（IANA 名称），透传给 Policy。
             海外操作国内平台时填 "Asia/Shanghai"（看的是平台活跃时段不是操作者本地时间）。
+
+        on_captcha — 可选回调 `fn(page) -> bool`（可 async）：遇验证码时调用。
+            ⚠️ **Mirage 自己不破解验证码**（那是另一个赛道，且已被 CapSolver/2Captcha 等做成红海）。
+            这里只提供"检测 → 挂钩 → 回填时机拟人化"：你自己接打码服务或人工处理，
+            回调返回 True 表示已解决，循环会**插入一段拟人停顿后**再继续（真人解完码不会
+            0 延迟立刻操作，秒续本身就是机器特征）；返回 False / 不提供回调 → 维持"立即停手"。
         """
         self.page = page
         self.policy = Policy(conservative=conservative, platform_tz=platform_tz)
@@ -77,6 +84,7 @@ class MirageLoop:
         # 软封杀雷达：_danger() 是"已经弹验证码了"的急刹，雷达是它的**前置预警**
         # （从趋势看出正在被降权，在被封之前就降速）。两者是"预警"和"急刹"的关系。
         self.radar = SoftBanRadar() if SoftBanRadar else None
+        self.on_captcha = on_captcha                # 见 docstring：Mirage 不破解，只挂钩
 
     async def _danger(self):
         """检测风控信号。先看弹窗(最准)，再退到整页完整短语匹配。熔断优先级最高。"""
@@ -96,6 +104,32 @@ class MirageLoop:
             return any(p in body for p in DANGER_PHRASES)
         except Exception:
             return False
+
+    async def _handle_captcha(self) -> bool:
+        """遇验证码：把控制权交给用户回调。**Mirage 自己不破解验证码**。
+
+        返回 True 仅当「回调声称已解决」且「复检风控信号已消失」——否则一律按未解决处理，
+        维持"立即停手"这一安全默认。dry-run 下不触发回调（演示模式不该产生真实副作用）。
+        """
+        if not self.on_captcha or self.dry_run:
+            return False
+        log.warning("检测到验证码/风控 → 交给 on_captcha 回调处理（Mirage 不破解验证码）")
+        try:
+            res = self.on_captcha(self.page)
+            if inspect.isawaitable(res):
+                res = await res
+        except Exception as e:                       # 回调是用户代码，抛错不该拖垮主循环
+            log.warning(f"on_captcha 回调抛错，按未解决处理：{e}")
+            return False
+        if not res:
+            return False
+        # 拟人化回填时机：真人解完码会先看一眼再动，**秒续本身就是机器特征**
+        await human_sleep(4.0, 0.8, 2.0)
+        if await self._danger():
+            log.warning("回调声称已处理，但风控信号仍在 → 不再继续")
+            return False
+        log.info("验证码已由回调处理，插入拟人停顿后继续")
+        return True
 
     async def _visible_cards(self):
         """识别当前可视区的笔记卡片（多重 fallback，用当前平台的选择器）。"""
@@ -152,6 +186,8 @@ class MirageLoop:
             if await self._danger():
                 if self.radar:
                     self.radar.observe(ok=False, captcha=True)   # 喂给雷达，供下次判趋势
+                if await self._handle_captcha():
+                    continue                                     # 回调已处理且信号消失，继续
                 log.warning("检测到风控信号（验证码/限流/异常），立即停止")
                 break
             if self.policy.exhausted():

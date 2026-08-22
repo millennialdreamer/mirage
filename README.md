@@ -21,6 +21,7 @@
 | 怕被封，给爬虫加固 | 下方「快速开始」：`apply_hardening.py --dry-run` → 真打 → `--check` |
 | 被警告 / 限流了怎么救 | [docs/safe-usage.md](docs/safe-usage.md)：立刻停手 → 切 safe 档 → 换小号 |
 | **想在被封"之前"就知道** | `mirage radar` ⭐软封杀预警：验证码率↑/返回缩水/延迟漂移/蜜罐命中/成功率下滑 五信号看趋势 |
+| 多账号怕被关联封一窝 | `mirage profile <种子>` ⭐一账号一画像：自洽指纹 + 矛盾校验 + 种子化噪声（`--emit` 导出注入 JS）|
 | 安全养号 / 点赞关注收藏 | 下方「互动引擎」（dry-run 默认，绝不替你实跑） |
 | 扩到抖音 / B站 等别的平台 | 一条 `-p all` 通吃 7 平台 → [docs/platforms.md](docs/platforms.md) |
 | 抖音签名挡住了（a_bogus/msToken/ttwid） | [docs/signature-layer.md](docs/signature-layer.md)：四重门 → 桥接 F2 + [桥接模板](examples/douyin_signature_bridge.py) |
@@ -92,6 +93,7 @@ python scripts/apply_hardening.py ~/path/to/MediaCrawler --revert
 | `scripts/interaction_policy.py` | 互动配额：保守每日上限 + 最小间隔 + 跨 session 计数持久化 |
 | `scripts/mirage_loop.py` | ⭐终极"拟人刷号"主循环：大量浏览 + 少量克制互动 + 风控熔断 + 软封杀预警自动降速 |
 | `scripts/soft_ban_radar.py` | ⭐**软封杀早期预警**：五前兆信号看趋势，在被封**之前**判断"正在被降权"并建议降速/换号；跨 session 基线、多账号隔离、小样本不给结论 |
+| `scripts/device_profile.py` | ⭐**统一设备画像 + 自洽校验**：所有指纹值从同一张画像派生（一致性 > 单值伪装）+ 出厂矛盾检测 + **种子化确定性** canvas/audio 噪声（同 profile 跨会话恒定，不是每次随机） |
 
 ## 🤝 互动引擎（点赞 / 关注 / 收藏 / 评论）
 
