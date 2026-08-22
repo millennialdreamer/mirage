@@ -15,7 +15,12 @@ fingerprint_benchmark.py — 加固前/后浏览器指纹的**相对基准分**�
 用法：
     python fingerprint_benchmark.py --self-test                        # 只测评分逻辑(MOCK,无浏览器,非证据)
     python fingerprint_benchmark.py --stealth ../libs/stealth.min.js   # 加固前后 7 信号相对基准(开窗口)
-    python fingerprint_benchmark.py --detect-url                       # ⭐去真实检测页亲眼看(真实证据入口)
+    python fingerprint_benchmark.py --detect-url                       # ⭐真检测页(解析真实通过率+全页截图)
+    python fingerprint_benchmark.py --botd                             # ⭐第三方 BotD 确定性判定(bot/botKind)
+
+三种模式的证据强度：--botd / --detect-url（第三方判的，真）> 本地 7 信号 BotScore（自打的，弱）
+> --self-test（MOCK，只验评分逻辑，不是证据）。
+驱动优先用 patchright（补 CDP Runtime.Enable 泄漏，注入脚本补不了这层），没装退回 playwright。
 
 依赖：playwright（仅真跑需要；--self-test 不需要）。BotScore 0~100，越高越像机器人（仅 7 基础信号相对分）。
 """
@@ -145,10 +150,7 @@ async def _probe(context, stealth_path):
 
 
 async def _run(stealth_path, headless):
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        sys.exit("✗ 未安装 playwright。先跑：pip install playwright && playwright install chromium")
+    async_playwright, _impl = _load_playwright()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
         ctx_a = await browser.new_context()
@@ -195,12 +197,83 @@ def self_test():
     print("⚠ 但这是 MOCK 硬编指纹，只验证评分逻辑——**不是真实证据**。真证据用 --detect-url 去真检测页。")
 
 
-async def _run_detect(url, stealth_path, headless):
-    """打开真实检测页(注入 stealth)，在真页面上采 7 信号 + 全页截图作为真实证据入口。"""
+def _load_playwright():
+    """优先用 patchright（Playwright 的 drop-in 补丁版，补掉 CDP `Runtime.Enable` /
+    `Console.enable` 泄漏——这是 stealth.min.js 这类注入脚本**原理上补不了**的驱动层泄漏）。
+    没装则退回原生 playwright。返回 (async_playwright, 实现名)。"""
+    try:
+        from patchright.async_api import async_playwright
+        return async_playwright, "patchright"
+    except ImportError:
+        pass
     try:
         from playwright.async_api import async_playwright
+        return async_playwright, "playwright"
     except ImportError:
-        sys.exit("✗ 未安装 playwright。先跑：pip install playwright && playwright install chromium")
+        sys.exit("✗ 未装浏览器驱动。推荐 pip install patchright（补 CDP 泄漏）"
+                 "或 pip install playwright；然后 <驱动> install chromium")
+
+
+# bot.sannysoft.com 的结果表：每个测试项一个 td.result，通过=.passed 失败=.failed，
+# 关键项还有稳定 id（#webdriver-result 等）。这是能拿到**真实通过率**的检测页。
+SANNYSOFT_JS = r"""() => {
+  const cells = Array.from(document.querySelectorAll('td.result'));
+  const passed = cells.filter(c => c.classList.contains('passed')).length;
+  const failed = cells.filter(c => c.classList.contains('failed')).length;
+  const pick = (id) => {
+    const el = document.querySelector('#' + id);
+    return el ? (el.textContent || '').trim().slice(0, 60) : null;
+  };
+  return {
+    passed: passed, failed: failed, total: passed + failed,
+    webdriver: pick('webdriver-result'),
+    advanced_webdriver: pick('advanced-webdriver-result'),
+    chrome: pick('chrome-result'),
+    permissions: pick('permissions-result'),
+  };
+}"""
+
+# FingerprintJS 官方开源 BotD（MIT）：纯客户端判定自动化框架，返回 {bot, botKind}。
+# 离线确定性判定，比自打 7 分靠谱得多。botKind 例：headless_chrome / selenium / electron。
+BOTD_JS = r"""async () => {
+  try {
+    const Botd = await import('https://openfpcdn.io/botd/v2');
+    const botd = await Botd.load();
+    const r = await botd.detect();
+    return { ok: true, bot: !!r.bot, botKind: r.botKind || '' };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}"""
+
+
+async def _run_botd(headless, stealth_path):
+    """本地注入 BotD 做确定性机器人判定（需联网取 CDN 模块，但判定在本地跑）。"""
+    apw, impl = _load_playwright()
+    print(f"  驱动实现：{impl}{'（已补 CDP 泄漏）' if impl == 'patchright' else '（建议装 patchright 补 CDP 泄漏）'}")
+    async with apw() as p:
+        browser = await p.chromium.launch(headless=headless)
+        ctx = await browser.new_context()
+        if stealth_path:
+            await ctx.add_init_script(path=stealth_path)
+        page = await ctx.new_page()
+        await page.goto("https://example.com", wait_until="domcontentloaded")
+        res = await page.evaluate(BOTD_JS)
+        await browser.close()
+    if not res.get("ok"):
+        print(f"  ⚠ BotD 加载失败（{res.get('error')}）——需要能访问 openfpcdn.io")
+        return res
+    if res["bot"]:
+        print(f"  🤖 BotD 判定：**是机器人**（botKind={res['botKind']}）—— 加固没骗过它")
+    else:
+        print("  ✓ BotD 判定：不是机器人（这是第三方开源检测器的真实判定，比 7 信号自打分有力）")
+    return res
+
+
+async def _run_detect(url, stealth_path, headless):
+    """打开真实检测页(注入 stealth)：解析该页**真实通过率** + 采 7 信号 + 全页截图。"""
+    async_playwright, impl = _load_playwright()
+    print(f"  驱动实现：{impl}{'（已补 CDP 泄漏）' if impl == 'patchright' else '（建议装 patchright 补 CDP 泄漏）'}")
     shot = os.path.expanduser(f"~/.mirage/detect_{int(time.time())}.png")
     os.makedirs(os.path.dirname(shot), exist_ok=True)
     async with async_playwright() as p:
@@ -210,17 +283,33 @@ async def _run_detect(url, stealth_path, headless):
             await ctx.add_init_script(path=stealth_path)
         page = await ctx.new_page()
         await page.goto(url, wait_until="networkidle")
+        await page.wait_for_timeout(2500)        # 等异步检测项渲染完（fp2 表是异步填的）
         await page.screenshot(path=shot, full_page=True)
         fp = await page.evaluate(EXTENDED_CHECK_JS)
+        sanny = None
+        if "sannysoft" in url:
+            try:
+                sanny = await page.evaluate(SANNYSOFT_JS)
+            except Exception:
+                sanny = None
         if not headless:
             await page.wait_for_timeout(6000)   # 留时间让你亲眼看
         await browser.close()
+
+    if sanny and sanny.get("total"):
+        rate = sanny["passed"] / sanny["total"] * 100
+        print(f"\n  ⭐真实通过率：{sanny['passed']}/{sanny['total']} = {rate:.0f}%（这是检测页自己判的，不是我自打的分）")
+        for k, label in (("webdriver", "navigator.webdriver"), ("advanced_webdriver", "高级 webdriver"),
+                         ("chrome", "window.chrome"), ("permissions", "permissions")):
+            if sanny.get(k):
+                print(f"    {label}: {sanny[k]}")
+        if rate < 100:
+            print(f"    ⚠ 有 {sanny['failed']} 项没过——截图里红/黄格子就是它们，逐项看才知道漏在哪。")
     bs, _ = score_fingerprint(fp)
-    print(f"\n  真检测页 7 信号 BotScore={bs}（webglRenderer={fp.get('webglRenderer')}）")
-    print(f"  ⭐ 真正的证据看这张全页截图：{shot}")
-    print("     里面 Canvas/WebGL/字体/自动化痕迹等深层判定，才是平台真会看的，不是这 7 分。")
+    print(f"\n  （参考）本地 7 信号 BotScore={bs}，webglRenderer={fp.get('webglRenderer')}")
+    print(f"  ⭐ 全页截图（Canvas/WebGL/字体等深层判定都在里面）：{shot}")
     print(f"  ⚠ {DISCLAIMER}")
-    return fp
+    return {"fp": fp, "sannysoft": sanny, "screenshot": shot}
 
 
 def main():
@@ -232,11 +321,19 @@ def main():
     ap.add_argument("--self-test", action="store_true", help="只测评分逻辑，不启动浏览器")
     ap.add_argument("--json", default="", help="把相对基准报告写到指定 JSON 路径")
     ap.add_argument("--detect-url", nargs="?", const="https://bot.sannysoft.com/", default="",
-                    help="⭐去真实检测页亲眼看(默认 bot.sannysoft.com)——比 7 信号相对分更接近真实证据")
+                    help="⭐去真实检测页(默认 bot.sannysoft.com)：解析该页真实通过率 + 全页截图")
+    ap.add_argument("--botd", action="store_true",
+                    help="⭐用 FingerprintJS 开源 BotD 做第三方确定性机器人判定(返回 bot/botKind)")
     args = ap.parse_args()
 
     if args.self_test:
         self_test()
+        return
+
+    if args.botd:
+        sp = args.stealth if os.path.isfile(args.stealth) else None
+        print(f"用 BotD 做第三方机器人判定（stealth={'注入' if sp else '无'}）……")
+        asyncio.run(_run_botd(args.headless, sp))
         return
 
     if args.detect_url:

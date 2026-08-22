@@ -28,10 +28,17 @@ def _doctor():
     ok = sys.version_info >= (3, 9)
     print(f"  Python {sys.version.split()[0]}   {'✓' if ok else '⚠ 建议 3.9+'}")
     try:
-        import playwright  # noqa: F401
-        print("  Playwright   ✓ 已安装（verify / benchmark 可跑）")
+        import patchright  # noqa: F401
+        print("  patchright   ✓ 已安装（Playwright 补丁版，已补 CDP Runtime.Enable 泄漏）")
     except ImportError:
-        print("  Playwright   ⚠ 未安装 —— 需要时：pip install playwright && playwright install chromium")
+        try:
+            import playwright  # noqa: F401
+            print("  Playwright   ✓ 已安装，但 ⚠ 建议改用 patchright：")
+            print("               pip install patchright && patchright install chromium")
+            print("               （原生 Playwright 启动时自动发 CDP Runtime.Enable，")
+            print("                 会留下可被 JS 侦测的痕迹，注入脚本层补不了这一层）")
+        except ImportError:
+            print("  浏览器驱动   ⚠ 未安装 —— 推荐：pip install patchright && patchright install chromium")
     found = []
     for base in (os.path.expanduser("~/Documents"), os.path.expanduser("~")):
         try:

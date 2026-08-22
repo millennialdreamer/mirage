@@ -62,8 +62,9 @@ Mirage 不是一套新爬虫，而是一组专门为 MediaCrawler 设计的行�
 - **TLS / JA3 与 HTTP/2 指纹**：CDP 控制的真实 Chrome 本身这些指纹正常，但**一旦经过中间人代理**，代理的 TLS 终结可能让 JA3 与 ClientHello 不一致——这也是本工具默认不接代理的原因之一。
 - **账号级行为序列**：风控会看一个账号长期是否只有"搜索→抓取"这种机器人模板，缺少点赞/收藏/关注等社交动作。这属于账号养号策略，超出爬虫工具范畴。
 - **鼠标轨迹的语义性**：本工具的贝塞尔移动目标是随机坐标；真实用户的鼠标会移向有意义的元素（卡片、图片）。已是合理近似，但非完美。
-- **CDP `Runtime.Enable` 泄漏**（🔴 2026-07 多方审红队新增，硬伤）：DataDome 2024 公开的检测——Playwright/Puppeteer 启动时自动调 CDP `Runtime.Enable`，会留下可被 JS 侦测的痕迹，`stealth.min.js` **完全不处理这一层**。要真堵需 `rebrowser-patches` 一类补丁禁用自动 Runtime.Enable（属浏览器驱动层改造，超出"一键加固脚本"定位）。
-- **`stealth.min.js` 是 2023-03 停更版**：本工具 L1 唯一指纹层用 puppeteer-extra-stealth 的 stealth.min.js，上游 2023-03 后无新 evasion——只挡"低端现成检测"，挡不住 2024+ 新招（Runtime.Enable / 深层 canvas 关联）。`fingerprint_benchmark.py` 的 BotScore 也只测 7 个基础信号、**非真实证据**；真实效果请用 `--detect-url` 去 CreepJS/BrowserScan 亲眼看。
+- **CDP `Runtime.Enable` 泄漏** → ✅ **已有解法（2026-07 更新，纠正此前判断）**：DataDome 2024 公开的检测——Playwright/Puppeteer 启动时自动调 CDP `Runtime.Enable`，留下可被 JS 侦测的痕迹，`stealth.min.js` 这类**注入脚本原理上补不了**（页面里的 JS 改不了驱动怎么发 CDP 命令）。此前本文写"属驱动层改造、超出定位"是**判断错误**：[`patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python) 是 Playwright 的 **drop-in 替换**（同 API，`pip install patchright` + 改 import 即可），它把 evaluate 全走 isolated context 从而避开 `Runtime.Enable`，还顺带禁掉 `Console.enable` 泄漏、修正 `--enable-automation` 等命令行标志——**不重编译浏览器，仍在本工具定位内**。`mirage doctor` 会检测并提示。
+- **`stealth.min.js` 已被上游 deprecated（2025-02）** 🔴：本工具 L1 用的 puppeteer-extra-stealth，上游已停止维护。更要命的是它的**随机 canvas 噪声**原理在 2026 已反成指纹信号——检测方（Castle/GeeTest 等）在同一页面跑两遍相同绘制比对 hash，真机恒定、而它每次随机 → **不一致本身即判定为伪造**。正解是"种子化确定性噪声"（同 profile 跨会话稳定），本工具尚未实现。**结论：L1 目前只挡低端现成检测，且部分特征已过时；优先级最高的升级是换 patchright。**
+- **benchmark 分数的性质**：`fingerprint_benchmark.py` 的 7 信号 BotScore 是**自打的相对分，非证据**。真实判定请用 `--detect-url`（解析 bot.sannysoft.com 真实通过率 + 全页截图）或 `--botd`（FingerprintJS 开源 BotD 第三方确定性判定）。⚠️ CreepJS 的 trust score 已在 2026 被官方打码禁用，读不到了，别信任何"能读 CreepJS 分数"的说法。
 
 **结论**：本工具能把你从"明显的机器人"降到"低活跃的真人"，足以应对多数中小规模抓取；但面对小红书最严格的风控，它是必要的"入场券"而非"隐身衣"。想更进一步，需要在账号养号、设备指纹、完整交互链上做更重的工程——那超出了一个"一键加固脚本"的定位。
 

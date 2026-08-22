@@ -22,7 +22,8 @@ Homepage = "https://github.com/millennialdreamer/mirage"
 
 # 核心 CLI（apply/doctor）零额外依赖；只有指纹自检/benchmark 需要浏览器。
 [project.optional-dependencies]
-browser = ["playwright>=1.40"]
+browser = ["patchright>=1.40"]        # 推荐：Playwright 的 drop-in 补丁版，补 CDP Runtime.Enable 泄漏
+browser-plain = ["playwright>=1.40"]  # 退路：原生 Playwright（有 CDP 泄漏，注入脚本补不了）
 
 [project.scripts]
 mirage = "mirage.cli:main"

@@ -26,7 +26,7 @@
 | 想抓 App（不是网页版） | [docs/app-capture.md](docs/app-capture.md)：抓包 vs UI自动化 两条路 + 维护现实 |
 | 想抓海外（YouTube/X/IG/TikTok） | [docs/overseas.md](docs/overseas.md)：公开 yt-dlp 一把梭 / 账号态看 pacing |
 | 想抓的平台不在上面（淘宝/美团/微信/Reddit…） | [docs/platform-coverage.md](docs/platform-coverage.md)：全平台覆盖矩阵 + 各自对应的现成栈 |
-| 看加固效果（相对基准，非证据） | `fingerprint_benchmark.py --detect-url` 去真检测页亲眼看深层判定 / `--self-test` 仅测评分逻辑 |
+| 看加固到底有没有效 | `fingerprint_benchmark.py --botd`（第三方 BotD 判定）或 `--detect-url`（真检测页通过率+截图）。⚠️ 本地 7 信号 BotScore 只是自打的相对分，**不是证据** |
 | 弄懂原理（五层怎么防） | [docs/anti-detection.md](docs/anti-detection.md) |
 
 ```bash
@@ -53,7 +53,7 @@ python scripts/apply_hardening.py /path/to/MediaCrawler --check     # 体检五�
 
 - **Python 3.11+**（与 MediaCrawler 一致）
 - 已装好并能跑通 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)
-- Playwright + Chromium（仅 `verify_stealth.py` 自检需要）：`pip install playwright && playwright install chromium`
+- 浏览器驱动（仅指纹自检/benchmark 需要）：**推荐 `pip install patchright && patchright install chromium`** —— patchright 是 Playwright 的 drop-in 补丁版，补掉原生 Playwright 的 CDP `Runtime.Enable`/`Console.enable` 泄漏（注入脚本层补不了这一层）。没装则退回 `pip install playwright`。`mirage doctor` 会检测并提示。
 - **核心脚本 `apply_hardening.py` 零额外依赖** —— 只用 Python 标准库，clone 下来直接能跑
 
 ## 🚀 快速开始
@@ -84,7 +84,7 @@ python scripts/apply_hardening.py ~/path/to/MediaCrawler --revert
 | `scripts/apply_hardening.py` | ⭐核心：一键打入五层加固，幂等 / 自动备份 / 可回滚 / dry-run / 体检 |
 | `scripts/safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换，并预估抓取速率 |
 | `scripts/verify_stealth.py` | 指纹自检：开浏览器对比"注入前/后"，确认 webdriver 等特征被隐藏 |
-| `scripts/fingerprint_benchmark.py` | 指纹相对基准分（7 信号 BotScore，**非真实证据**）+ `--detect-url` 去真检测页(bot.sannysoft.com)亲眼看深层判定；真跑手动 |
+| `scripts/fingerprint_benchmark.py` | 三档验证：`--botd`(第三方 BotD 确定性判定) / `--detect-url`(真检测页通过率+全页截图) / 本地 7 信号相对分(**非证据**)；驱动优先 patchright；真跑手动 |
 | `scripts/human_behavior.py` | 人类行为模拟模块（抖动睡眠 / 预热 / 鼠标滚动），可手动集成复用 |
 | `scripts/weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游有无反检测补丁 |
 | `scripts/human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（dry-run 默认） |
