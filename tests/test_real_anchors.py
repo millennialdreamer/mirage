@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-真实锚点回归 —— 直击 apply_hardening 的核心风险面：
-「用脆弱正则改写真实第三方源码」会不会 miss 锚点、会不会损坏语法。
+Real anchor regression — directly targets apply_hardening's core risk surface:
+will rewriting real third-party source with fragile regex miss anchors or break syntax?
 
-两层防线：
-  1) 可移植层：内置从真实 MediaCrawler 7 平台采集到的 search 签名变体（2026-06），
-     任何环境可跑，锁住「真实世界见过的代码形态」，防上游漂移悄悄打穿锚点。
-  2) 真实环境层（可选）：检测到本机真实 MediaCrawler 时，对 7 平台原始 core.py 全量回归；
-     别的机器自动跳过，不阻断 CI。
+Two lines of defense:
+  1) Portable layer: built-in search signature variants collected from real MediaCrawler 7 platforms (2026-06),
+     runnable in any environment, locks down the "code shapes seen in the real world"
+     to prevent upstream drift from silently breaking anchors.
+  2) Real environment layer (optional): when a local real MediaCrawler is detected,
+     full regression against the original core.py of 7 platforms;
+     other machines skip automatically, no CI blockage.
 
-既可 `pytest tests/test_real_anchors.py`，也可 `python3 tests/test_real_anchors.py` 直接跑。
+Run via `pytest tests/test_real_anchors.py`, or directly via `python3 tests/test_real_anchors.py`.
 """
-import os
-import sys
 import ast
-import tempfile
+import importlib.util
+import os
 import shutil
 import subprocess
-import importlib.util
+import sys
+import tempfile
 
 SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 AH = os.path.join(SCRIPTS, "apply_hardening.py")
@@ -25,17 +27,17 @@ _spec = importlib.util.spec_from_file_location("ah", AH)
 ah = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ah)
 
-# 从真实 MediaCrawler 7 平台采集到的 search 签名变体（2026-06，已验证命中）
+# search signature variants collected from real MediaCrawler 7 platforms (2026-06, verified to hit)
 REAL_SIGNATURES = [
     "    async def search(self) -> None:",   # xhs / dy / tieba / zhihu
     "    async def search(self):",            # ks / bili / wb
 ]
 
 def _find_real_mediacrawler() -> str:
-    """定位一份真实 MediaCrawler 用于回归（没有就跳过真实环境层，不影响 CI）。
+    """Locate a real MediaCrawler for regression (skip the real-environment layer if absent, no CI impact).
 
-    优先级：环境变量 MIRAGE_TEST_MEDIACRAWLER > 常见安装位置自动探测。
-    （不写死任何个人路径——那既泄漏本机目录结构，对其他贡献者也无用。）
+    Priority: env var MIRAGE_TEST_MEDIACRAWLER > common install location auto-detection.
+    (No hard-coded personal paths — that would leak local directory structure and is useless to other contributors.)
     """
     env = os.environ.get("MIRAGE_TEST_MEDIACRAWLER", "").strip()
     if env and os.path.isdir(env):
@@ -50,7 +52,7 @@ def _find_real_mediacrawler() -> str:
                 if entry == "MediaCrawler" and os.path.isfile(
                         os.path.join(cand, "config", "base_config.py")):
                     return cand
-                nested = os.path.join(cand, "MediaCrawler")   # 再下探一层
+                nested = os.path.join(cand, "MediaCrawler")   # probe one level deeper
                 if os.path.isdir(cand) and os.path.isfile(
                         os.path.join(nested, "config", "base_config.py")):
                     return nested
@@ -97,31 +99,31 @@ def _apply(root, alias="xhs"):
 
 
 def test_real_signature_variants_all_hit():
-    """真实世界见过的每种 search 签名，L2/L4/L5 都必须命中且补丁后 AST 正确。"""
+    """Every search signature shape seen in the real world must hit L2/L4/L5, and the patched source must remain valid AST."""
     for sig in REAL_SIGNATURES:
         root = _build_fake_root(_fake_core(sig))
         try:
             r = _apply(root)
-            assert r.returncode == 0, f"apply 失败 ({sig}):\n{r.stdout}{r.stderr}"
+            assert r.returncode == 0, f"apply failed ({sig}):\n{r.stdout}{r.stderr}"
             out = ah.read(os.path.join(root, "media_platform", "xhs", "core.py"))
-            ast.parse(out)                                       # 补丁不损坏语法
-            assert "L2 jitter" in out, f"L2 锚点 miss: {sig}"
-            assert "L4: human warm-up" in out, f"L4 锚点 miss: {sig}"
-            assert "_xhs_stealth_human_activity" in out, f"L5 锚点 miss: {sig}"
+            ast.parse(out)                                       # patch must not break syntax
+            assert "L2 jitter" in out, f"L2 anchor miss: {sig}"
+            assert "L4: human warm-up" in out, f"L4 anchor miss: {sig}"
+            assert "_xhs_stealth_human_activity" in out, f"L5 anchor miss: {sig}"
         finally:
             shutil.rmtree(root)
 
 
 def test_real_mediacrawler_7platforms():
-    """本机有真实 MediaCrawler 时，对 7 平台原始 core.py 全量回归；没有则跳过。"""
+    """When a real MediaCrawler exists locally, run full regression on the original core.py of 7 platforms; otherwise skip."""
     if not os.path.isdir(REAL_MC):
-        print("  (skip) 本机无真实 MediaCrawler，仅跑可移植层")
+        print("  (skip) no local real MediaCrawler, portable layer only")
         return
 
     def real_core(pdir):
         cur = os.path.join(REAL_MC, "media_platform", pdir, "core.py")
         bak = cur + ah.BAK_SUFFIX
-        return bak if os.path.isfile(bak) else cur   # 加固过的平台用 .bak 原版
+        return bak if os.path.isfile(bak) else cur   # hardened platforms use the .bak original
 
     def real_file(rel):
         cur = os.path.join(REAL_MC, rel)
@@ -141,17 +143,17 @@ def test_real_mediacrawler_7platforms():
                 shutil.copy2(cdp, os.path.join(root, "tools", "cdp_browser.py"))
             ah.write(os.path.join(root, "libs", "stealth.min.js"), "// webdriver\n" + "x" * 1200)
             r = _apply(root, alias)
-            assert r.returncode == 0, f"{alias} apply 失败:\n{r.stdout}{r.stderr}"
+            assert r.returncode == 0, f"{alias} apply failed:\n{r.stdout}{r.stderr}"
             out = ah.read(os.path.join(root, "media_platform", pdir, "core.py"))
-            ast.parse(out)                                       # 真实代码补丁后不损坏
-            assert "L4: human warm-up" in out, f"{alias} L4 锚点 miss —— 真实签名不兼容"
+            ast.parse(out)                                       # real code must not break after patch
+            assert "L4: human warm-up" in out, f"{alias} L4 anchor miss -- real signature incompatible"
         finally:
             shutil.rmtree(root)
 
 
 if __name__ == "__main__":
     test_real_signature_variants_all_hit()
-    print("✓ 真实签名变体全命中（可移植层）")
+    print("✓ real signature variants all hit (portable layer)")
     test_real_mediacrawler_7platforms()
-    print("✓ 真实 MediaCrawler 7 平台回归通过（或已跳过）")
-    print("🎉 test_real_anchors 全通过")
+    print("✓ real MediaCrawler 7-platform regression passed (or skipped)")
+    print("🎉 test_real_anchors all passed")

@@ -69,11 +69,11 @@ def verdict(fp):
 def show(title, fp):
     print(f"\n  [{title}]")
     print(f"    navigator.webdriver : {fp.get('webdriver')}")
-    print(f"    navigator.plugins   : {fp.get('plugins')} plugin(s)")
+    print(f"    navigator.plugins: {fp.get('plugins')} plugin(s)")
     print(f"    navigator.languages : {fp.get('languages')}")
-    print(f"    window.chrome       : {fp.get('hasChrome')}")
-    print(f"    permissions API     : {fp.get('permissionsApi')}")
-    print(f"    WebGL vendor        : {fp.get('webglVendor')}")
+    print(f"    window.chrome: {fp.get('hasChrome')}")
+    print(f"    permissions API: {fp.get('permissionsApi')}")
+    print(f"    WebGL vendor: {fp.get('webglVendor')}")
     flags = verdict(fp)
     if flags:
         for f in flags:

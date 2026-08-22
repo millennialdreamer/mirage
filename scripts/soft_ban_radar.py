@@ -1,48 +1,56 @@
 # -*- coding: utf-8 -*-
 """
-soft_ban_radar.py — 软封杀早期预警雷达（Mirage 的"观测位"能力）。
+soft_ban_radar.py — early-warning radar for shadow bans (Mirage's "observation post" capability).
 
-## 为什么需要它
+## Why it is needed
 
-现有的 `mirage_loop._danger()` 是**验证码弹出来了才熔断**——那时账号已经被标记，是"事后"。
-但平台在硬封之前，通常先**悄悄降权**（shadow ban）：还能用，只是验证码变多、返回内容缩水、
-响应变慢、成功率慢慢掉。这些信号**单看每一次都不异常，只有看趋势才看得出来**。
+The existing `mirage_loop._danger()` only trips the circuit breaker **after a CAPTCHA appears** — by then the account is already
+flagged; it is "after the fact".
+But platforms usually **quietly de-rank** (shadow ban) before a hard ban: the account still works, but CAPTCHAs become more
+frequent, returned content shrinks,
+responses slow down, and success rate gradually drops. Individually none of these signals look abnormal; only the trend reveals them.
 
-雷达做的就是这件事：**在被封之前看出"正在被盯上"**，主动降速/换号，而不是等 403。
+That is what the radar does: **detect that you are "being watched" before the ban**, and proactively slow down / switch accounts
+instead of waiting for a 403.
 
-## 为什么是 Mirage 来做（而不是别人）
+## Why Mirage does this (and not someone else)
 
-反检测浏览器只管指纹、代理商只管 IP、打码平台只管过码——**只有 Mirage 同时坐在
-"注入了什么 + 发出去什么 + 回来什么"这三者的交汇处**，是全链路唯一能观测到这五个信号的位置。
+Anti-detection browsers only handle fingerprints, proxy providers only handle IPs, CAPTCHA solvers only handle passing CAPTCHAs —
+**only Mirage sits at the intersection of
+"what was injected + what was sent + what came back"**, the only position in the whole chain that can observe these five signals.
 
-## 五个前兆信号
+## Five early-warning signals
 
-| 信号 | 含义 | 为什么是前兆 |
-|------|------|-------------|
-| 验证码触发率 ↑ | 最近窗口里遇到验证码/滑块的比例 | 正常应该≈0；一旦非零就是已被怀疑 |
-| 返回完整度 ↓ | 拿到的字段数 / 应有字段数 | **降权最典型的表现：能返回但返回缩水**（静默变脏） |
-| 延迟分布漂移 | 最近中位延迟 / 基线中位延迟 | 被限速时响应会明显变慢 |
-| 蜜罐命中 | 抓到/点到了隐藏元素 | **确凿证据**——真人看不见的元素只有机器人会碰 |
-| 成功率下降斜率 | 基线成功率 − 最近成功率 | 慢性劣化的直接体现 |
+| Signal | Meaning | Why it is a precursor |
+|--------|---------|----------------------|
+| CAPTCHA trigger rate ↑ | Share of CAPTCHA/slider challenges in the recent window | Normally should be ≈0; once non-zero, you are
+already suspected |
+| Return completeness ↓ | Fields obtained / fields expected | **The most typical de-ranking symptom: it returns but returns less**
+(silently dirtied) |
+| Latency distribution drift | Recent median latency / baseline median latency | Responses become noticeably slower when rate-limited |
+| Honeypot hit | Caught/clicked a hidden element | **Hard evidence** — elements invisible to humans are only touched by bots |
+| Success rate decline slope | Baseline success rate − recent success rate | Direct manifestation of chronic deterioration |
 
-## 诚实边界（重要）
+## Honest boundaries (important)
 
-- 这是**启发式趋势判断，不是精确判定**。它给的是"该不该降速"的建议，不是"你被封了"的结论。
-- 样本不足（< `MIN_SAMPLES`）时**明确返回"数据不足"而不是瞎猜**——小样本下的趋势没有意义。
-- 阈值是经验值，不同平台差异很大，用 `SoftBanRadar(thresholds=...)` 自行调。
-- 它**不能替代**风控熔断（`_danger()`）；两者是"预警"和"急刹"的关系，都要有。
+- This is a **heuristic trend judgment, not an exact verdict**. It suggests "should you slow down", not "you are banned".
+- With insufficient samples (< `MIN_SAMPLES`) it **explicitly returns "insufficient data" instead of guessing** — trends from tiny
+samples are meaningless.
+- Thresholds are empirical values and vary widely across platforms; tune them with `SoftBanRadar(thresholds=...)`.
+- It **cannot replace** risk-control circuit breaking (`_danger()`); the two are the relationship of "early warning" and "emergency
+braking", both are needed.
 
-## 用法
+## Usage
 
     from soft_ban_radar import SoftBanRadar
 
-    radar = SoftBanRadar()                       # 自动加载历史基线
-    ...每次请求/互动后记一笔...
+    radar = SoftBanRadar()                       # auto-load historical baseline
+    ...record an observation after each request/interaction...
     radar.observe(ok=True, latency=1.3, completeness=0.95, captcha=False)
 
     v = radar.assess()
     if v.level in ("警戒", "危险"):
-        print(v.advice)                          # 按建议降速或停手
+        print(v.advice)                          # slow down or stop as advised
 """
 from __future__ import annotations
 
@@ -53,43 +61,43 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-# 窗口与样本量
-RECENT_WINDOW = 20        # "最近"取多少次
-BASELINE_WINDOW = 60      # 基线最多回溯多少次（更早的丢弃，避免陈年数据拖累）
-MIN_SAMPLES = 12          # 少于这个样本量不给结论——小样本趋势没有意义
-MIN_BASELINE = 8          # 基线至少要这么多次才可比
+# Window and sample size
+RECENT_WINDOW = 20        # how many observations count as "recent"
+BASELINE_WINDOW = 60      # max baseline lookback (older discarded to avoid stale data dragging)
+MIN_SAMPLES = 12          # below this sample count no conclusion — tiny-sample trends are meaningless
+MIN_BASELINE = 8          # baseline needs at least this many to be comparable
 
-# 判定阈值（经验值，平台差异大，可通过构造参数覆盖）
+# Judgment thresholds (empirical values, vary widely by platform, can be overridden via constructor args)
 DEFAULT_THRESHOLDS = {
-    "captcha_rate_warn": 0.01,     # 最近窗口出现任何验证码就该警觉
+    "captcha_rate_warn": 0.01,     # any CAPTCHA in the recent window should raise alert
     "captcha_rate_alert": 0.10,
-    "completeness_drop_warn": 0.10,   # 完整度比基线掉 10%
+    "completeness_drop_warn": 0.10,   # completeness drops 10% vs baseline
     "completeness_drop_alert": 0.25,
-    "latency_ratio_warn": 1.6,        # 中位延迟涨到基线 1.6 倍
+    "latency_ratio_warn": 1.6,        # median latency rises to 1.6x baseline
     "latency_ratio_alert": 2.5,
-    "success_drop_warn": 0.15,        # 成功率比基线掉 15 个百分点
+    "success_drop_warn": 0.15,        # success rate drops 15 percentage points vs baseline
     "success_drop_alert": 0.30,
 }
 
-# 各信号权重（蜜罐是确凿证据，单独给最高权重）
+# Per-signal weights (honeypot is hard evidence, separately given the highest severity)
 WEIGHTS = {"captcha": 26, "completeness": 24, "latency": 16, "success": 22, "honeypot": 12}
 
 
 @dataclass
 class Observation:
-    """一次观测。latency/completeness 拿不到就传 None，雷达会跳过对应信号。"""
+    """One observation. If latency/completeness are unavailable, pass None and the radar will skip the corresponding signal."""
     ts: float
     ok: bool = True
-    latency: Optional[float] = None        # 秒
-    completeness: Optional[float] = None   # 0~1：实得字段 / 应有字段
+    latency: Optional[float] = None        # seconds
+    completeness: Optional[float] = None   # 0~1: obtained fields / expected fields
     captcha: bool = False
     honeypot: bool = False
 
 
 @dataclass
 class Verdict:
-    level: str                              # 数据不足 / 正常 / 观察 / 警戒 / 危险
-    score: int                              # 0~100，越高越危险
+    level: str                              # insufficient data / normal / watch / warning / danger
+    score: int                              # 0~100, higher means more dangerous
     advice: str
     signals: dict = field(default_factory=dict)
     samples: int = 0
@@ -107,7 +115,7 @@ def _median(xs):
 
 
 def _grade(value, warn, alert):
-    """把一个指标映射成 0~1 的严重度（未达 warn=0，达 alert=1，中间线性）。"""
+    """Map a metric to a 0~1 severity (below warn=0, at alert=1, linear in between)."""
     if value is None or value <= warn:
         return 0.0
     if value >= alert:
@@ -117,17 +125,17 @@ def _grade(value, warn, alert):
 
 
 class SoftBanRadar:
-    """软封杀早期预警：累积观测 → 比对基线 → 给风险等级和建议。"""
+    """Shadow-ban early warning: accumulate observations → compare baseline → produce risk level and advice."""
 
     def __init__(self, state_path: str = "~/.mirage/softban_radar.json",
                  thresholds: Optional[dict] = None, account: str = "default") -> None:
         self.path = os.path.expanduser(state_path)
-        self.account = account                      # 多账号分别建基线，互不污染
+        self.account = account                      # separate baseline per account, no cross-contamination
         self.th = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._obs: list[Observation] = []
         self._load()
 
-    # ── 持久化：趋势判断依赖历史基线，必须跨 session ──────────────
+    # ── Persistence: trend judgment depends on historical baseline, must span sessions ──────────────
     def _load(self) -> None:
         try:
             with open(self.path, encoding="utf-8") as f:
@@ -135,7 +143,7 @@ class SoftBanRadar:
             raw = data.get(self.account, [])
             self._obs = [Observation(**o) for o in raw][-BASELINE_WINDOW:]
         except Exception:
-            self._obs = []                          # 不存在/损坏 → 从零开始
+            self._obs = []                          # missing/corrupt → start from zero
 
     def _save(self) -> None:
         try:
@@ -151,24 +159,24 @@ class SoftBanRadar:
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
-            os.replace(tmp, self.path)              # 原子写
+            os.replace(tmp, self.path)              # atomic write
         except Exception:
-            pass                                    # 记录失败绝不打断主流程
+            pass                                    # a save failure must never interrupt the main flow
 
-    # ── 观测 ────────────────────────────────────────────────
+    # ── Observation ────────────────────────────────────────────────
     def observe(self, ok: bool = True, latency: Optional[float] = None,
                 completeness: Optional[float] = None, captcha: bool = False,
                 honeypot: bool = False) -> None:
-        """记一次观测。在每次请求 / 每轮互动之后调用。"""
+        """Record one observation. Call after each request / each interaction round."""
         self._obs.append(Observation(ts=time.time(), ok=ok, latency=latency,
                                      completeness=completeness, captcha=captcha,
                                      honeypot=honeypot))
         self._obs = self._obs[-BASELINE_WINDOW:]
         self._save()
 
-    # ── 判定 ────────────────────────────────────────────────
+    # ── Judgment ────────────────────────────────────────────────
     def assess(self) -> Verdict:
-        """比对"最近窗口"与"更早的基线"，输出风险等级 + 建议。"""
+        """Compare the "recent window" against the "earlier baseline", output risk level + advice."""
         n = len(self._obs)
         if n < MIN_SAMPLES:
             return Verdict(level="数据不足", score=0, samples=n,
@@ -180,19 +188,19 @@ class SoftBanRadar:
         sig: dict = {}
         sev: dict = {}
 
-        # 1) 验证码触发率（正常应≈0）
+        # 1) CAPTCHA trigger rate (normally should be ≈0)
         cap_rate = sum(1 for o in recent if o.captcha) / len(recent)
         sig["验证码触发率"] = round(cap_rate, 3)
         sev["captcha"] = _grade(cap_rate, self.th["captcha_rate_warn"], self.th["captcha_rate_alert"])
 
-        # 2) 蜜罐命中（确凿证据，一次即满格）
+        # 2) honeypot hit (hard evidence, one hit is full severity)
         hp = sum(1 for o in recent if o.honeypot)
         sig["蜜罐命中"] = hp
         sev["honeypot"] = 1.0 if hp else 0.0
 
         can_compare = len(baseline) >= MIN_BASELINE
 
-        # 3) 返回完整度下降（降权最典型：能返回但缩水）
+        # 3) return completeness drop (de-ranking's most typical symptom: returns but shrinks)
         r_comp, b_comp = _median([o.completeness for o in recent]), _median([o.completeness for o in baseline])
         if can_compare and r_comp is not None and b_comp is not None:
             drop = b_comp - r_comp
@@ -201,7 +209,7 @@ class SoftBanRadar:
         else:
             sev["completeness"] = 0.0
 
-        # 4) 延迟漂移（被限速会明显变慢）
+        # 4) latency drift (rate limiting makes responses noticeably slower)
         r_lat, b_lat = _median([o.latency for o in recent]), _median([o.latency for o in baseline])
         if can_compare and r_lat and b_lat and b_lat > 0:
             ratio = r_lat / b_lat
@@ -210,7 +218,7 @@ class SoftBanRadar:
         else:
             sev["latency"] = 0.0
 
-        # 5) 成功率下降
+        # 5) success rate drop
         r_ok = sum(1 for o in recent if o.ok) / len(recent)
         sig["最近成功率"] = round(r_ok, 3)
         if can_compare:
@@ -222,10 +230,12 @@ class SoftBanRadar:
             sev["success"] = 0.0
 
         score = int(round(sum(WEIGHTS[k] * sev.get(k, 0.0) for k in WEIGHTS)))
-        # 蜜罐命中是**确凿证据**（真人看不见的元素只有自动化会碰），不能被其它信号的"正常"稀释。
-        # 单靠加权它只值 12 分会落进"正常"区间——那就与本模块把它称作确凿证据自相矛盾了。
+        # Honeypot hits are **hard evidence** (elements invisible to humans are only touched by automation),
+        # and cannot be diluted by "normal" readings from other signals.
+        # By weight alone they are worth only 12 points, which would fall into the "normal" range —
+        # contradicting this module calling them hard evidence.
         if hp:
-            score = max(score, 40)                  # 一次命中即直接进警戒区
+            score = max(score, 40)                  # one hit immediately enters warning range
         score = max(0, min(100, score))
 
         if score >= 60:
@@ -250,6 +260,6 @@ class SoftBanRadar:
         return f"[软封杀雷达] {v.level}({v.score}/100) 样本{v.samples}  {parts}"
 
     def reset(self) -> None:
-        """换号/换 IP 后调用：旧基线不再适用，清空重建。"""
+        """Call after switching account/IP: old baseline no longer applies, clear and rebuild."""
         self._obs = []
         self._save()

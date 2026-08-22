@@ -1,32 +1,36 @@
 # -*- coding: utf-8 -*-
 """
-抖音签名层桥接参考 —— 不自己逆向，桥接到 F2（活跃维护、已解决四重门）。
+Douyin signature layer bridge reference — don't reverse-engineer it yourself, bridge to F2 (actively maintained, already solved the four
+gates).
 
-⚠️ 定位：这是 MediaCrawler 的【请求 / 签名层】参考模板，**不是 Mirage 的行为层加固范围**
-   （边界说明见 docs/signature-layer.md）。Mirage 不接管、不保证 F2 上游兼容。
+⚠️ Positioning: This is MediaCrawler's [request / signature layer] reference template, **not Mirage's behavior-layer hardening scope**
+   (boundary notes see docs/signature-layer.md). Mirage does not take over or guarantee F2 upstream compatibility.
 
-抖音四重门 → F2 对应解法（对着 F2 当前真实 API 写）：
-  ① 拿不到 video/user id（首页 SSR 空壳）→ SecUserIdFetcher.get_sec_user_id(分享/主页链接)
-  ② msToken 动态生成（不在 cookie 里）     → TokenManager.gen_real_msToken() / gen_false_msToken()
+Douyin four gates → F2 corresponding solutions (written against F2's current real API):
+  ① Can't get video/user id (homepage SSR shell) → SecUserIdFetcher.get_sec_user_id(share/profile link)
+  ② msToken dynamic generation (not in cookie)     → TokenManager.gen_real_msToken() / gen_false_msToken()
   ③ a_bogus + ttwid                        → ABogusManager.model_2_endpoint() + TokenManager.gen_ttwid()
-  ④ webid / verifyFp / 参数                 → TokenManager.gen_webid() / VerifyFpManager.gen_verify_fp()
-  ⑤ JA3 传输层指纹（httpx 会暴露）          → curl_cffi requests(impersonate="chrome")  # 见 docs/tls-fingerprint.md
+  ④ webid / verifyFp / params                 → TokenManager.gen_webid() / VerifyFpManager.gen_verify_fp()
+  ⑤ JA3 transport-layer fingerprint (httpx will expose it)          → curl_cffi requests(impersonate="chrome")  # see docs/tls-
+  fingerprint.md
 
-前置：  pip install f2 curl_cffi        （F2 = Apache-2.0，仅供学习研究）
+Prerequisites:  pip install f2 curl_cffi        (F2 = Apache-2.0, for study/research only)
 
-本文件是**结构正确的参考模板**，按 F2 当前 API 写。F2 会随抖音改版更新——用前请对照
-F2 最新源码/文档核对方法签名，并自备有效 cookie。真跑由你手动（AI 不代跑、不主动触发风控）。
+This file is a **structurally-correct reference template**, written against F2's current API. F2 will update as Douyin changes — before
+use, check
+the latest F2 source/docs for method signatures, and prepare valid cookies. Actually running is manual (AI does not run it for you and
+does not proactively trigger risk control).
 """
 from __future__ import annotations
 
-# 与签名绑定的 UA 必须和真实浏览器一致（a_bogus 对 UA 敏感）
+# The UA bound to the signature must match a real browser (a_bogus is UA-sensitive)
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 
 def resolve_sec_user_id(share_or_profile_url: str) -> str:
-    """① 从分享/主页链接反解 sec_user_id，绕开"首页 SSR 空壳拿不到 id"。
-    若你已在 async 上下文，请直接 await SecUserIdFetcher.get_sec_user_id(url)。"""
+    """① Resolve sec_user_id from share/profile link, bypassing the "homepage SSR shell can't get id".
+    If you are already in an async context, please directly await SecUserIdFetcher.get_sec_user_id(url)."""
     import asyncio
 
     from f2.apps.douyin.utils import SecUserIdFetcher
@@ -34,21 +38,21 @@ def resolve_sec_user_id(share_or_profile_url: str) -> str:
 
 
 def build_signed_request(base_endpoint: str, params: dict, cookie: str) -> tuple[str, dict]:
-    """把一个抖音 web 接口补齐四重门签名，返回 (signed_url, headers)。
+    """Complete the four-gate signing for a Douyin web endpoint, returning (signed_url, headers).
 
-    base_endpoint 例：'https://www.douyin.com/aweme/v1/web/aweme/post/'
-    params        例：{'sec_user_id': ..., 'count': 18, 'max_cursor': 0}
+    base_endpoint example: 'https://www.douyin.com/aweme/v1/web/aweme/post/'
+    params        example: {'sec_user_id': ..., 'count': 18, 'max_cursor': 0}
     """
     from f2.apps.douyin.utils import ABogusManager, TokenManager
 
-    # ② msToken：动态生成（gen_real 联网拿真 token / gen_false 纯本地兜底）
+    # ② msToken: generated dynamically (gen_real fetches a real token over the network / gen_false is a pure local fallback)
     ms_token = TokenManager.gen_real_msToken()
     params = {**params, "msToken": ms_token}
 
-    # ③ a_bogus：把带 msToken 的 params 一起签，F2 返回补好 a_bogus 的完整 URL
+    # ③ a_bogus: sign the params including msToken together, F2 returns the full URL with a_bogus filled in
     signed_url = ABogusManager.model_2_endpoint(UA, base_endpoint, params)
 
-    # ③ ttwid + cookie 拼装
+    # ③ ttwid + cookie assembly
     ttwid = TokenManager.gen_ttwid()
     headers = {
         "User-Agent": UA,
@@ -59,13 +63,13 @@ def build_signed_request(base_endpoint: str, params: dict, cookie: str) -> tuple
 
 
 def fetch_with_ja3(url: str, headers: dict):
-    """⑤ 用 curl_cffi 发请求：JA3 伪装成 Chrome（httpx 的 JA3 会暴露，见 docs/tls-fingerprint.md）。"""
+    """⑤ Use curl_cffi to make the request: JA3 impersonates Chrome (httpx's JA3 will be exposed, see docs/tls-fingerprint.md)."""
     from curl_cffi import requests
     return requests.get(url, headers=headers, impersonate="chrome", timeout=15)
 
 
 def demo(cookie: str, share_url: str):
-    """端到端示范（需自备 cookie + 已 pip install f2 curl_cffi；请你手动跑）。"""
+    """End-to-end demo (requires your own cookie + already pip install f2 curl_cffi; please run it manually)."""
     sec_uid = resolve_sec_user_id(share_url)                          # ①
     base = "https://www.douyin.com/aweme/v1/web/aweme/post/"
     params = {"sec_user_id": sec_uid, "count": 18, "max_cursor": 0}
@@ -76,5 +80,5 @@ def demo(cookie: str, share_url: str):
 
 if __name__ == "__main__":
     print(__doc__)
-    print(">> 这是参考模板。请先 `pip install f2 curl_cffi`、自备 cookie，")
-    print(">> 对照 F2 最新文档核对 API 后，手动调用 demo(cookie, share_url)。")
+    print(">> This is a reference template. Please first `pip install f2 curl_cffi`, prepare your own cookie,")
+    print(">> and after checking the API against the latest F2 docs, manually call demo(cookie, share_url).")

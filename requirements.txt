@@ -1,14 +1,23 @@
-# Mirage — Python 依赖声明
+# Mirage — dependency notes
 #
-# apply_hardening.py   零外部依赖（纯标准库：os/re/shutil/sys/urllib/argparse/ast）
-# safe_profile.py      零外部依赖
+# Prefer `pip install -e ".[browser]"` (see pyproject.toml). This file is kept for
+# environments that still expect a requirements.txt.
 #
-# 以下脚本需要 playwright：
-#   - verify_stealth.py      （打开浏览器验证 stealth.min.js 生效）
-#   - human_behavior.py      （贝塞尔鼠标轨迹，供 apply_hardening 注入到目标 core.py 使用）
-#   - human_interaction.py   （拟人互动引擎：点赞/关注/收藏/评论）
-#   - mirage_loop.py         （拟人刷号主循环）
+# Zero third-party dependencies (standard library only):
+#   apply_hardening.py, safe_profile.py, soft_ban_radar.py, device_profile.py,
+#   interaction_policy.py, cli.py
 #
-# 安装 playwright 浏览器内核（仅一次）：
-#   playwright install chromium
-playwright>=1.40
+# Needs a browser driver:
+#   verify_stealth.py          launches a browser to verify stealth.min.js took effect
+#   fingerprint_benchmark.py   --detect-url / --botd checks
+#   human_behavior.py          Bézier mouse paths, injected into the target core.py
+#   human_interaction.py       interaction engine (like / follow / collect / comment)
+#   mirage_loop.py             main human-like loop
+#
+# patchright is a drop-in Playwright replacement that also closes the CDP
+# Runtime.Enable leak — injected scripts cannot reach that layer. Prefer it.
+#   pip install patchright && patchright install chromium
+patchright>=1.40
+
+# Fallback if you must use stock Playwright (leaves the CDP leak in place):
+# playwright>=1.40

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-mirage_loop.py — Mirage 终极版「拟人刷号」主循环。
+mirage_loop.py — Mirage ultimate "human-like account warming" main loop.
 
-不是"狂点循环"，是模拟真人刷小红书：**大量浏览 + 少量克制互动 + 自然停顿**。
-让整个 session 的行为分布像真人，而非高频点击——这才是真正的 0 封控之道。
+Not a "click-spam loop", but simulating a real person browsing Xiaohongshu: **heavy browsing + restrained interaction + natural pauses**.
+Makes the whole session's behavior distribution resemble a real person, not high-frequency clicking — that is the real zero-ban path.
 
-⚠️ 默认 dry-run（只演示不真点）。每轮先做风控熔断检查。只用小号。AI 绝不自己实跑。
+⚠️ Default dry-run (demo only, no real clicks). Each round first runs a risk-control circuit-breaker check. Only use alt accounts.
+The AI never runs it for real.
 
-编排：human_behavior(浏览) + human_interaction(互动) + interaction_policy(配额)。
+Choreography: human_behavior(browse) + human_interaction(interact) + interaction_policy(quota).
 """
 
 import asyncio
@@ -24,14 +25,14 @@ except ImportError:
         from tools.human_behavior import human_sleep, simulate_page_activity, warmup
         from tools.human_interaction import XhsInteractor
         from tools.interaction_policy import Policy
-    except ImportError:                           # pip 安装后的 mirage 包语境
+    except ImportError:                           # pip-installed mirage package context
         from mirage.human_behavior import human_sleep, simulate_page_activity, warmup
         from mirage.human_interaction import XhsInteractor
         from mirage.interaction_policy import Policy
 
 try:
-    from _logging import get_logger  # 库模块日志（别裸 print）
-except ImportError:                               # 部署/包语境兜底：退化成标准库 logger
+    from _logging import get_logger  # library module logging (don't use bare print)
+except ImportError:                               # deployment/package context fallback: degrade to stdlib logger
     import logging as _logging_mod
 
     def get_logger(name: str = "mirage.loop"):
@@ -41,7 +42,7 @@ except ImportError:                               # 部署/包语境兜底：退
 
 log = get_logger("mirage.loop")
 
-try:                                              # 软封杀雷达（可选：缺失则降级为不预警）
+try:                                              # soft ban radar (optional: if missing, degrade to no early warning)
     from soft_ban_radar import SoftBanRadar
 except ImportError:
     try:
@@ -52,8 +53,9 @@ except ImportError:
         except ImportError:
             SoftBanRadar = None
 
-# 风控信号：用**完整短语**（笔记正文几乎不会出现），优先在弹窗里查，大幅降低误判。
-# 反例：单个"验证码"三字可能出现在笔记正文里 → 会误熔断，所以不用单词。
+# Risk-control signals: use **full phrases** (almost never appear in note body text), check dialogs first, massively reduce false positives.
+# Counter-example: the standalone word "captcha" may appear in note body text → would falsely trigger circuit breaker, so don't use single
+# words.
 DANGER_PHRASES = ["操作过于频繁", "操作太频繁", "频繁操作请", "完成安全验证",
                   "账号存在异常", "账号出现异常", "系统检测到异常", "请完成验证",
                   "拖动滑块", "滑动验证", "你的账号已被", "账号已被封", "请重新登录"]
@@ -66,29 +68,32 @@ class MirageLoop:
                  conservative=False, max_minutes=30,
                  platform_tz="Asia/Shanghai", on_captcha=None):
         """
-        platform_tz — 目标平台所在时区（IANA 名称），透传给 Policy。
-            海外操作国内平台时填 "Asia/Shanghai"（看的是平台活跃时段不是操作者本地时间）。
+        platform_tz — target platform's timezone (IANA name), passed through to Policy.
+            When operating a domestic platform from overseas, use "Asia/Shanghai" (it follows the platform's active hours, not the
+            operator's local time).
 
-        on_captcha — 可选回调 `fn(page) -> bool`（可 async）：遇验证码时调用。
-            ⚠️ **Mirage 自己不破解验证码**（那是另一个赛道，且已被 CapSolver/2Captcha 等做成红海）。
-            这里只提供"检测 → 挂钩 → 回填时机拟人化"：你自己接打码服务或人工处理，
-            回调返回 True 表示已解决，循环会**插入一段拟人停顿后**再继续（真人解完码不会
-            0 延迟立刻操作，秒续本身就是机器特征）；返回 False / 不提供回调 → 维持"立即停手"。
+        on_captcha — optional callback `fn(page) -> bool` (may be async): called when a captcha is encountered.
+            ⚠️ **Mirage does not solve captchas itself** (that's another track, already a red ocean with CapSolver/2Captcha etc.).
+            Here it only provides "detect → hook → human-like refill timing": you connect a captcha service or handle it manually.
+            Callback returning True means resolved; the loop will **insert a human-like pause** before continuing (a real person
+            won't resume with 0 delay after solving a captcha — instant resume is itself a machine trait). Returning False / no
+            callback → maintain "stop immediately".
         """
         self.page = page
         self.policy = Policy(conservative=conservative, platform_tz=platform_tz)
         self.actor = XhsInteractor(page, policy=self.policy, dry_run=dry_run)
-        self.interact_prob = interact_prob          # 看到一条笔记→互动的概率（多数只看）
+        self.interact_prob = interact_prob          # probability of interacting after seeing a note (usually just browse)
         self.max_seconds = max_minutes * 60
         self.dry_run = dry_run
-        # 软封杀雷达：_danger() 是"已经弹验证码了"的急刹，雷达是它的**前置预警**
-        # （从趋势看出正在被降权，在被封之前就降速）。两者是"预警"和"急刹"的关系。
+        # Soft-ban radar: _danger() is the emergency brake for "captcha already popped up"; the radar is its **early warning**
+        # (detects trending downranking and slows down before the ban). The two are "early warning" vs "emergency brake".
         self.radar = SoftBanRadar() if SoftBanRadar else None
-        self.on_captcha = on_captcha                # 见 docstring：Mirage 不破解，只挂钩
+        self.on_captcha = on_captcha                # see docstring: Mirage does not solve, only hooks
 
     async def _danger(self):
-        """检测风控信号。先看弹窗(最准)，再退到整页完整短语匹配。熔断优先级最高。"""
-        # 1) 风控弹窗 / 验证遮罩——最可靠的信号
+        """Detect risk-control signals. Dialogs first (most reliable), then fall back to
+        whole-phrase matching on the page. The circuit breaker has top priority."""
+        # 1) Risk-control dialog / verification overlay — most reliable signal
         try:
             for sel in DANGER_DIALOG_SEL:
                 d = self.page.locator(sel).first
@@ -98,7 +103,8 @@ class MirageLoop:
                         return True
         except Exception:
             pass
-        # 2) 整页只匹配**完整短语**（单个"验证码"二字不算，避免笔记正文误判）
+        # 2) Full page only matches **complete phrases** (the standalone word "captcha" doesn't count, avoiding false positives from note
+        # body text)
         try:
             body = (await self.page.inner_text("body"))[:5000]
             return any(p in body for p in DANGER_PHRASES)
@@ -106,33 +112,36 @@ class MirageLoop:
             return False
 
     async def _handle_captcha(self) -> bool:
-        """遇验证码：把控制权交给用户回调。**Mirage 自己不破解验证码**。
+        """On captcha: hand control to the user callback. **Mirage does not solve captchas itself**.
 
-        返回 True 仅当「回调声称已解决」且「复检风控信号已消失」——否则一律按未解决处理，
-        维持"立即停手"这一安全默认。dry-run 下不触发回调（演示模式不该产生真实副作用）。
+        Returns True only if the callback claims resolved and a re-check shows the risk-control signal is gone — otherwise always treated
+        as unresolved,
+        maintaining the safe default of "stop immediately". Callback is not invoked in dry-run (demo mode should not produce real
+        side effects).
         """
         if not self.on_captcha or self.dry_run:
             return False
-        log.warning("检测到验证码/风控 → 交给 on_captcha 回调处理（Mirage 不破解验证码）")
+        log.warning("Detected captcha/risk control → handing to on_captcha callback (Mirage does not solve captchas)")
         try:
             res = self.on_captcha(self.page)
             if inspect.isawaitable(res):
                 res = await res
-        except Exception as e:                       # 回调是用户代码，抛错不该拖垮主循环
-            log.warning(f"on_captcha 回调抛错，按未解决处理：{e}")
+        except Exception as e:                       # callback is user code, errors should not crash the main loop
+            log.warning(f"on_captcha callback raised error, treating as unresolved: {e}")
             return False
         if not res:
             return False
-        # 拟人化回填时机：真人解完码会先看一眼再动，**秒续本身就是机器特征**
+        # Human-like refill timing: a real person looks around before acting after solving a captcha; **instant resume is itself a machine
+        # trait**
         await human_sleep(4.0, 0.8, 2.0)
         if await self._danger():
-            log.warning("回调声称已处理，但风控信号仍在 → 不再继续")
+            log.warning("Callback claims handled, but risk-control signal still present → not continuing")
             return False
-        log.info("验证码已由回调处理，插入拟人停顿后继续")
+        log.info("Captcha handled by callback, continuing after human-like pause")
         return True
 
     async def _visible_cards(self):
-        """识别当前可视区的笔记卡片（多重 fallback，用当前平台的选择器）。"""
+        """Identify note cards in the current viewport (multiple fallbacks, using current platform selectors)."""
         for sel in self.actor._selectors.get("note_card", []):
             try:
                 loc = self.page.locator(sel)
@@ -144,11 +153,11 @@ class MirageLoop:
         return []
 
     async def _decide_and_act(self, card):
-        """对一条笔记：多数只看；点进去看的也不一定互动（真人看完常划走）。"""
-        # 一段决策：受本轮"心情"调制的互动倾向，绝大多数只是滑过
+        """For a note: mostly just browse; even opened notes are not necessarily interacted with (real people often swipe away after reading)."""
+        # First decision: interaction tendency modulated by this round's "mood"; the vast majority just swipe past
         if random.random() > self.interact_prob * getattr(self, "_mood", 1.0):
             return False
-        # 点进详情，阅读停留（长尾：多数 2.5~6s，偶尔看很久 8~20s）
+        # Open the detail page, dwell to read (long tail: mostly 2.5~6s, occasionally much longer 8~20s)
         try:
             await self.actor._human_click(card, "笔记卡片")
             dwell = random.uniform(2.5, 6.0) if random.random() > 0.2 else random.uniform(8.0, 20.0)
@@ -156,17 +165,17 @@ class MirageLoop:
         except Exception:
             pass
         acted = False
-        # 二段决策："真看够才赞"——看完只有约 45% 觉得值得互动，
-        # 把有限的每日配额留给真正想互动的优质内容（精准 > 频率）
+        # Second decision: "like only after truly reading enough" — only about 45% feel worth interacting after reading;
+        # save the limited daily quota for quality content truly worth interacting with (precision > frequency)
         if random.random() < 0.45:
             roll = random.random()
             if roll < 0.70:
-                acted = await self.actor.like_note()      # 点赞占多数
+                acted = await self.actor.like_note()      # likes are the majority
             elif roll < 0.90:
                 acted = await self.actor.collect_note()
             else:
-                acted = await self.actor.follow_user()    # 关注最敏感 → 最少
-        # 看完返回信息流
+                acted = await self.actor.follow_user()    # follow is the most sensitive → least frequent
+        # Return to feed after reading
         try:
             await self.page.go_back()
             await human_sleep(1.0, 0.6, 1.4)
@@ -175,77 +184,77 @@ class MirageLoop:
         return acted
 
     async def run(self):
-        log.info(f"=== Mirage 刷号循环启动 ({'DRY-RUN 演示' if self.dry_run else '真实互动'}) ===")
+        log.info(f"=== Mirage account warming loop started ({'DRY-RUN demo' if self.dry_run else 'real interaction'}) ===")
         if not self.dry_run:
-            log.warning("真实互动模式：会真的给人点赞/关注。确认用的是小号！")
+            log.warning("Real interaction mode: will actually like/follow people. Make sure you are using an alt account!")
         await warmup()
         start = time.time()
         rounds = 0
         while True:
-            # —— 熔断：最高优先级 ——
+            # —— Circuit breaker: highest priority ——
             if await self._danger():
                 if self.radar:
-                    self.radar.observe(ok=False, captcha=True)   # 喂给雷达，供下次判趋势
+                    self.radar.observe(ok=False, captcha=True)   # feed the radar for next trend judgement
                 if await self._handle_captcha():
-                    continue                                     # 回调已处理且信号消失，继续
-                log.warning("检测到风控信号（验证码/限流/异常），立即停止")
+                    continue                                     # callback handled and signal gone, continue
+                log.warning("Detected risk-control signal (captcha/rate-limit/abnormal), stopping immediately")
                 break
             if self.policy.exhausted():
-                log.info("今日互动预算全部用尽，收工")
+                log.info("Today's interaction budget fully used, done for the day")
                 break
             if time.time() - start > self.max_seconds:
-                log.info("到达运行时长上限，收工")
+                log.info("Reached runtime limit, done")
                 break
 
-            # —— 时段感知：深夜直接歇 ——
+            # —— Time-slot awareness: rest directly in the deep night ——
             slot_mult = self.policy.interact_prob_multiplier()
             if slot_mult == 0.0:
-                # 深夜（平台时间 2~6 点），真人极少，暂停一段再检查
+                # Deep night (platform time 2~6), real people are rare; pause and check later
                 slot = self.policy.current_slot()
-                log.info(f"当前平台时段【{slot}】，不适合互动，暂停 600s 后再检查")
-                await asyncio.sleep(600)   # 10 分钟后重新判断时段
+                log.info(f"Current platform time slot [{slot}], unsuitable for interaction, pausing 600s and re-checking")
+                await asyncio.sleep(600)   # re-evaluate time slot after 10 minutes
                 continue
 
-            # —— 浏览：滚动 + 贝塞尔鼠标 + 阅读停留 ——
+            # —— Browsing: scroll + bezier mouse + reading dwell ——
             await simulate_page_activity(self.page)
 
-            # 本轮"心情"：兴趣有起伏，互动概率随轮波动（真人不是恒定 15%）
-            # 同时叠加时段系数：夜间/平稳期降低互动意愿
+            # This round's "mood": interest fluctuates, interaction probability varies between rounds (a real person is not a constant 15%)
+            # Also multiplied by the time-slot coefficient: night/quiet periods lower interaction willingness
             self._mood = random.uniform(0.5, 1.6) * slot_mult
 
-            # —— 处理随机 2~4 条笔记；每条都**重新识别**(避免 go_back 后旧引用失效) ——
+            # —— Process random 2~4 notes; re-identify each time (avoid stale references after go_back) ——
             for _ in range(random.randint(2, 4)):
                 if await self._danger():
                     break
                 cards = await self._visible_cards()
                 if not cards:
                     break
-                await self._decide_and_act(random.choice(cards))  # 随机选，不按固定序
-                await human_sleep(4.0, 0.7, 1.6)    # 互动/浏览之间的自然间隔
+                await self._decide_and_act(random.choice(cards))  # pick randomly, not a fixed order
+                await human_sleep(4.0, 0.7, 1.6)    # natural gap between interactions/browsing
 
             rounds += 1
-            log.info(f"第 {rounds} 轮完成 | 时段[{self.policy.current_slot()}×{slot_mult:.1f}] | 今日 {self.policy.summary()}")
+            log.info(f"Round {rounds} complete | slot[{self.policy.current_slot()}×{slot_mult:.1f}] | today {self.policy.summary()}")
 
-            # —— 软封杀预警：在"被封"之前就看出正在被降权 ——
+            # —— Soft-ban early warning: detect downranking before being banned ——
             slow_factor = 1.0
             if self.radar:
-                self.radar.observe(ok=True)         # 本轮跑完没撞风控
+                self.radar.observe(ok=True)         # this round finished without hitting risk control
                 v = self.radar.assess()
                 if v.should_stop():
-                    log.warning(f"软封杀雷达 {v.level}({v.score}/100)：{v.advice}")
+                    log.warning(f"Soft-ban radar {v.level}({v.score}/100): {v.advice}")
                     break
                 if v.should_slow_down():
-                    slow_factor = 2.0 if v.level == "警戒" else 1.5
-                    log.warning(f"软封杀雷达 {v.level}({v.score}/100) → 本轮起降速 ×{slow_factor}；{v.advice}")
+                    slow_factor = 2.0 if v.level == "warning" else 1.5
+                    log.warning(f"Soft-ban radar {v.level}({v.score}/100) → slowing down ×{slow_factor} from this round; {v.advice}")
                 elif rounds % 5 == 0:
                     log.info(self.radar.summary())
 
-            await human_sleep(6.0 * slow_factor, 0.7, 1.5)   # 轮间停顿（雷达报警时自动拉长）
+            await human_sleep(6.0 * slow_factor, 0.7, 1.5)   # inter-round pause (auto-lengthened when radar alarms)
 
-            # —— 偶尔"走神"长停（真人会分心去做别的）——
+            # —— Occasionally "zone out" with a long pause (real people get distracted by other things) ——
             if random.random() < 0.15:
                 pause = random.uniform(20, 90)
-                log.debug(f"走神 {pause:.0f}s")
+                log.debug(f"Zoned out {pause:.0f}s")
                 await asyncio.sleep(pause)
 
-        log.info(f"=== 结束：共 {rounds} 轮，今日 {self.policy.summary()} ===")
+        log.info(f"=== Finished: {rounds} rounds total, today {self.policy.summary()} ===")

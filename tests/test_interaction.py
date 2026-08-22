@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-tests/test_interaction.py — interaction_policy 与 human_interaction 单元测试
+tests/test_interaction.py — interaction_policy and human_interaction unit tests
 
-运行方式：
+Usage:
   python tests/test_interaction.py
 
-测试覆盖：
-  1. interaction_policy：每日上限 / 最小间隔防秒赞 / 跨天清零 / conservative 砍 1/3
-  2. human_interaction：dry_run 安全阀（贝塞尔移动 mouse.move 但不调 mouse.down/up）
+Test coverage:
+  1. interaction_policy: daily limit / min gap anti-rapid-like / cross-day reset / conservative cut to 1/3
+  2. human_interaction: dry_run safety valve (Bezier move mouse.move but no mouse.down/up)
 """
 
 import asyncio
@@ -17,15 +17,15 @@ import sys
 import tempfile
 import time
 
-# 让测试可从 repo 根目录 or tests/ 内直接跑
+# Allow tests to run directly from repo root or inside tests/
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SCRIPTS = os.path.join(_ROOT, "scripts")
 sys.path.insert(0, _SCRIPTS)
 
-from interaction_policy import Policy, DEFAULT_LIMITS, MIN_GAP
+from interaction_policy import DEFAULT_LIMITS, MIN_GAP, Policy
 
 # ════════════════════════════════════════════════════════════════════
-# 辅助
+# Helpers
 # ════════════════════════════════════════════════════════════════════
 _pass = 0
 _fail = 0
@@ -40,88 +40,88 @@ def check(name, cond, detail=""):
         _fail += 1
 
 def tmp_state():
-    """返回一个临时 state 文件路径（测试结束后自动删除）。"""
+    """Return a temporary state file path (auto-deleted after test)."""
     fd, path = tempfile.mkstemp(suffix=".json", prefix="mirage_test_")
     os.close(fd)
-    os.unlink(path)   # Policy 自己会创建；我们只要路径
+    os.unlink(path)   # Policy creates it itself; we only need the path
     return path
 
 
 # ════════════════════════════════════════════════════════════════════
-# 1. interaction_policy 测试
+# 1. interaction_policy tests
 # ════════════════════════════════════════════════════════════════════
 def test_policy():
     print("\n── interaction_policy ──")
 
-    # 1-a. 正常情况：初始时应全部 can()
+    # 1-a. Normal case: initially all can() should be True
     p = Policy(state_path=tmp_state())
     for action in DEFAULT_LIMITS:
-        check(f"初始 can({action})", p.can(action))
+        check(f"initial can({action})", p.can(action))
 
-    # 1-b. 每日上限：record 到上限后 can() 返回 False
+    # 1-b. Daily limit: after record reaches limit, can() returns False
     p2 = Policy(state_path=tmp_state(), limits={"like": 2, "follow": 1, "collect": 1, "comment": 1})
-    # like 上限=2：连续record两次（用 _last 清零绕过间隔检查）
-    p2._last["like"] = 0   # 重置上次时间让间隔检查通过
+    # like limit=2: record twice consecutively (clear _last to bypass gap check)
+    p2._last["like"] = 0   # reset last time so gap check passes
     p2.record("like")
     p2._last["like"] = 0
     p2.record("like")
-    check("超上限后 can(like)=False", not p2.can("like"))
+    check("after over limit can(like)=False", not p2.can("like"))
 
-    # 1-c. 最小间隔防秒赞：record 一次后立刻 can() 应为 False
+    # 1-c. Min gap anti-rapid-like: immediately after record once, can() should be False
     p3 = Policy(state_path=tmp_state(), limits={"like": 200, "follow": 200, "collect": 200, "comment": 200})
-    p3._last["like"] = 0   # 确保间隔检查通过，可以 record
+    p3._last["like"] = 0   # ensure gap check passes so record works
     p3.record("like")
-    # 刚 record 完，_last["like"] = now，间隔 < MIN_GAP["like"](25s)
-    check("刚 record 后秒赞防护 can(like)=False", not p3.can("like"),
-          f"MIN_GAP={MIN_GAP['like']}s，刚记录应被拒绝")
+    # just recorded, _last["like"] = now, interval < MIN_GAP["like"](25s)
+    check("immediately after record rapid-like guard can(like)=False", not p3.can("like"),
+          f"MIN_GAP={MIN_GAP['like']}s, should be rejected right after record")
 
-    # 1-d. 手动把 _last 拨到足够久以前，can() 应恢复 True
+    # 1-d. Manually set _last far enough back, can() should become True again
     p3._last["like"] = time.time() - MIN_GAP["like"] - 1
-    check("间隔足够后 can(like)=True", p3.can("like"))
+    check("after enough gap can(like)=True", p3.can("like"))
 
-    # 1-e. 跨天清零：手动注入 "昨天" 的 date + 计数，重新加载后计数归零
-    from datetime import date, timedelta
+    # 1-e. Cross-day reset: manually inject "yesterday" date + counts, after reload counts reset
     import json
+    from datetime import date, timedelta
     yesterday = str(date.today() - timedelta(days=1))
     path = tmp_state()
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
-    # 直接写一个"昨天"的 state 文件
+    # directly write a "yesterday" state file
     with open(path, "w") as f:
         json.dump({"date": yesterday, "counts": {"like": 999}, "last": {}}, f)
     p4 = Policy(state_path=path)
-    check("跨天清零：like count=0", p4._counts.get("like", 0) == 0,
-          f"实际={p4._counts.get('like',0)}")
-    check("跨天后 can(like)=True", p4.can("like"))
+    check("cross-day reset: like count=0", p4._counts.get("like", 0) == 0,
+          f"actual={p4._counts.get('like',0)}")
+    check("after cross-day can(like)=True", p4.can("like"))
 
-    # 1-f. conservative 模式：上限砍到 1/3（向下取整，最小 1）
+    # 1-f. conservative mode: limit cut to 1/3 (floor, minimum 1)
     p5 = Policy(state_path=tmp_state(), conservative=True)
     for k, orig in DEFAULT_LIMITS.items():
         expected = max(1, orig // 3)
-        check(f"conservative {k} 上限={expected}", p5.limits[k] == expected,
-              f"实际={p5.limits[k]}")
+        check(f"conservative {k} limit={expected}", p5.limits[k] == expected,
+              f"actual={p5.limits[k]}")
 
-    # 1-g. exhausted()：所有动作都到上限
+    # 1-g. exhausted(): all actions reach limit
     p6 = Policy(state_path=tmp_state(), limits={"like": 1, "follow": 1, "collect": 1, "comment": 1})
     for action in p6.limits:
         p6._last[action] = 0
         p6.record(action)
-    check("exhausted()=True 当所有动作达上限", p6.exhausted())
+    check("exhausted()=True when all actions hit limit", p6.exhausted())
 
-    # 1-h. remaining() 正确计算
+    # 1-h. remaining() calculates correctly
     p7 = Policy(state_path=tmp_state(), limits={"like": 5, "follow": 3, "collect": 4, "comment": 2})
     p7._last["like"] = 0
     p7.record("like")   # like count -> 1
     rem = p7.remaining()
-    check("remaining() like=4", rem["like"] == 4, f"实际={rem['like']}")
-    check("remaining() follow=3", rem["follow"] == 3, f"实际={rem['follow']}")
+    check("remaining() like=4", rem["like"] == 4, f"actual={rem['like']}")
+    check("remaining() follow=3", rem["follow"] == 3, f"actual={rem['follow']}")
 
 
 # ════════════════════════════════════════════════════════════════════
-# 2. human_interaction dry_run 安全阀测试
-#    （用 mock page 替代真实 Playwright page）
+# 2. human_interaction dry_run safety valve test
+#    (use mock page instead of real Playwright page)
 # ════════════════════════════════════════════════════════════════════
 class MockMouse:
-    """记录所有 mouse 调用，供断言用。"""
+    """Record all mouse calls for assertions."""
     def __init__(self):
         self.moves = []
         self.downs = 0
@@ -138,7 +138,7 @@ class MockMouse:
 
 
 class MockLocator:
-    """最小可用 locator mock：count/is_visible/bounding_box/scroll_into_view_if_needed/wait_for/click/get_attribute。"""
+    """Minimal usable locator mock: count/is_visible/bounding_box/scroll_into_view_if_needed/wait_for/click/get_attribute."""
     def __init__(self, visible=True, box=None, attr_val="false"):
         self._visible = visible
         self._box = box or {"x": 100, "y": 200, "width": 80, "height": 30}
@@ -160,20 +160,20 @@ class MockLocator:
         pass
 
     async def click(self, trial=False, timeout=1500):
-        pass   # trial=True 无副作用
+        pass   # trial=True has no side effects
 
     async def get_attribute(self, name):
         return self._attr_val
 
 
 class MockPage:
-    """最小 Playwright page mock。"""
+    """Minimal Playwright page mock."""
     def __init__(self):
         self.mouse = MockMouse()
         self._locators = {}   # key -> MockLocator
 
     def locator(self, selector):
-        # 对第一个 selector 返回可见 locator，其余返回不可见的（让 _resolve 用第一个命中）
+        # Return visible locator for the first selector; others return invisible (so _resolve hits the first one)
         return MockLocator(visible=True)
 
     def register_locator(self, selector, loc):
@@ -182,24 +182,23 @@ class MockPage:
 
 def test_human_interaction_dry_run():
     """
-    dry_run=True 时：
-      - _human_click 必须调用 mouse.move（贝塞尔移动到位）
-      - 绝不调用 mouse.down / mouse.up（不真点）
-    dry_run=False 时（mock 模拟）：
-      - mouse.down 和 mouse.up 各调用一次
+    When dry_run=True:
+      - _human_click must call mouse.move (Bezier move into place)
+      - Never call mouse.down / mouse.up (no real click)
+    When dry_run=False (mock simulation):
+      - mouse.down and mouse.up each called once
     """
-    print("\n── human_interaction dry_run 安全阀 ──")
+    print("\n── human_interaction dry_run safety valve ──")
 
-    # human_behavior 的 human_mouse_move 需要真实 page.mouse，
-    # 我们在 scripts/ 路径下 monkeypatch 它，用一个简单版本替代。
-    import importlib
+    # human_behavior's human_mouse_move needs real page.mouse,
+    # so we monkeypatch it under scripts/ path with a simple version.
     import types
 
-    # 构造一个最小的 human_behavior stub，使 import 成功
+    # Build a minimal human_behavior stub so import succeeds
     stub = types.ModuleType("human_behavior")
 
     async def _stub_human_mouse_move(page, tx, ty, start=(None, None)):
-        """stub：直接调用 page.mouse.move，返回终点坐标。"""
+        """stub: call page.mouse.move directly and return end coordinates."""
         await page.mouse.move(tx, ty)
         return (tx, ty)
 
@@ -210,12 +209,12 @@ def test_human_interaction_dry_run():
     stub.human_sleep = _stub_human_sleep
     sys.modules["human_behavior"] = stub
 
-    # 重新加载 human_interaction，使其 import 命中 stub
+    # Reload human_interaction so its import hits the stub
     if "human_interaction" in sys.modules:
         del sys.modules["human_interaction"]
     from human_interaction import XhsInteractor
 
-    # —— 测试 dry_run=True ——
+    # -- test dry_run=True --
     async def _test_dry():
         page = MockPage()
         interactor = XhsInteractor(page, dry_run=True)
@@ -225,19 +224,19 @@ def test_human_interaction_dry_run():
 
     mouse_dry, clicked_dry = asyncio.run(_test_dry())
 
-    check("dry_run=True: mouse.move 被调用（贝塞尔到位）",
+    check("dry_run=True: mouse.move called (Bezier to target)",
           len(mouse_dry.moves) > 0,
           f"moves={mouse_dry.moves}")
-    check("dry_run=True: 不调 mouse.down（不真点）",
+    check("dry_run=True: mouse.down not called (no real click)",
           mouse_dry.downs == 0,
           f"downs={mouse_dry.downs}")
-    check("dry_run=True: 不调 mouse.up（不真点）",
+    check("dry_run=True: mouse.up not called (no real click)",
           mouse_dry.ups == 0,
           f"ups={mouse_dry.ups}")
-    check("dry_run=True: _human_click 返回 False",
+    check("dry_run=True: _human_click returns False",
           clicked_dry is False)
 
-    # —— 测试 dry_run=False ——
+    # -- test dry_run=False --
     async def _test_real():
         page = MockPage()
         interactor = XhsInteractor(page, dry_run=False)
@@ -247,25 +246,25 @@ def test_human_interaction_dry_run():
 
     mouse_real, clicked_real = asyncio.run(_test_real())
 
-    check("dry_run=False: mouse.move 被调用",
+    check("dry_run=False: mouse.move called",
           len(mouse_real.moves) > 0)
-    check("dry_run=False: mouse.down 调用一次",
+    check("dry_run=False: mouse.down called once",
           mouse_real.downs == 1,
           f"downs={mouse_real.downs}")
-    check("dry_run=False: mouse.up 调用一次",
+    check("dry_run=False: mouse.up called once",
           mouse_real.ups == 1,
           f"ups={mouse_real.ups}")
-    check("dry_run=False: _human_click 返回 True",
+    check("dry_run=False: _human_click returns True",
           clicked_real is True)
 
-    # 清理 stub
+    # Clean up stub
     del sys.modules["human_behavior"]
     if "human_interaction" in sys.modules:
         del sys.modules["human_interaction"]
 
 
 # ════════════════════════════════════════════════════════════════════
-# 主入口
+# Main entry point
 # ════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     test_policy()
@@ -273,7 +272,7 @@ if __name__ == "__main__":
 
     print(f"\n{'='*40}")
     total = _pass + _fail
-    print(f"结果：{_pass}/{total} PASS，{_fail} FAIL")
+    print(f"Result: {_pass}/{total} PASS, {_fail} FAIL")
     if _fail:
         print("FAIL")
         sys.exit(1)

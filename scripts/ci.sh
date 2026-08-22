@@ -1,44 +1,44 @@
 #!/usr/bin/env bash
-# 本地 CI —— 一键 pytest + benchmark 自检 + ruff + mypy。
-# 代替 GitHub Actions（本环境额度禁 Actions）；ruff/mypy 没装会优雅跳过并提示安装。
-# 用法：  bash scripts/ci.sh
+# Local CI — one-shot pytest + benchmark self-check + ruff + mypy.
+# Replaces GitHub Actions (Actions disabled by quota in this environment); ruff/mypy missing will skip gracefully and prompt install.
+# Usage:  bash scripts/ci.sh
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT" || exit 1          # 统一在 repo 根跑，确保 ruff/mypy 读到 pyproject 配置
+cd "$ROOT" || exit 1          # Run from repo root consistently, ensure ruff/mypy read pyproject config
 fail=0
 step() { echo; echo "━━ $1 ━━"; }
 
-step "pytest（测试）"
+step "pytest (tests)"
 if python3 -c "import pytest" 2>/dev/null; then
     python3 -m pytest "$ROOT/tests" -q || fail=1
 else
-    echo "  ⚠ 未装 pytest，跳过 → pip install pytest"
+    echo "  ⚠ pytest not installed, skipping → pip install pytest"
 fi
 
-step "benchmark 评分逻辑自检（无浏览器）"
+step "benchmark scoring logic self-check (no browser)"
 if python3 "$ROOT/scripts/fingerprint_benchmark.py" --self-test >/dev/null 2>&1; then
-    echo "  ✓ fingerprint_benchmark self-test 通过"
+    echo "  ✓ fingerprint_benchmark self-test passed"
 else
-    echo "  ✗ benchmark self-test 失败"; fail=1
+    echo "  ✗ benchmark self-test failed"; fail=1
 fi
 
-step "ruff（lint）"
+step "ruff (lint)"
 if command -v ruff >/dev/null 2>&1; then
     ruff check "$ROOT/scripts" || fail=1
 else
-    echo "  ⚠ 未装 ruff，跳过 → pip install ruff"
+    echo "  ⚠ ruff not installed, skipping → pip install ruff"
 fi
 
-step "mypy（类型检查 · 全 scripts）"
+step "mypy (type check · all scripts)"
 if command -v mypy >/dev/null 2>&1; then
     mypy "$ROOT/scripts" --ignore-missing-imports || fail=1
 else
-    echo "  ⚠ 未装 mypy，跳过 → pip install mypy"
+    echo "  ⚠ mypy not installed, skipping → pip install mypy"
 fi
 
 echo
 if [ "$fail" -eq 0 ]; then
-    echo "🎉 本地 CI 全绿"
+    echo "🎉 Local CI all green"
 else
-    echo "✗ 本地 CI 有失败项（见上）"; exit 1
+    echo "✗ Local CI has failures (see above)"; exit 1
 fi

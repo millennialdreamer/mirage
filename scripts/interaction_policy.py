@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-interaction_policy.py — Mirage 互动节奏/配额层（"0 封控"的硬约束所在）。
+interaction_policy.py — Mirage interaction rhythm/quota layer (where the "0 risk control" hard constraints live).
 
-三个机制：
-  1. **保守每日上限**：默认值刻意低于风控线（宁可慢）；新号可砍到 1/3。
-  2. **两次同类互动的最小间隔**：杜绝"秒赞""规律间隔"这类机器特征。
-  3. **跨 session 计数持久化**：存到 ~/.mirage/interaction_state.json，
-     **重启程序也不清零**（否则重启就能绕过上限），跨天才自动归零。
+Three mechanisms:
+  1. **Conservative daily caps**: defaults are deliberately below the risk-control line (better slow); new accounts can be cut to 1/3.
+  2. **Minimum interval between two interactions of the same type**: eliminates machine traits like "instant likes" and "regular intervals".
+  3. **Cross-session counter persistence**: stored in ~/.mirage/interaction_state.json;
+     **restarting the program does not reset it** (otherwise restarting would bypass the caps), and it only auto-resets across days.
 
-数字基于对小红书风控的保守认知（刷量/秒赞/批量关注是高危区），属经验取值，
-用户可按自己号的情况调低；绝不建议调高。
+The numbers are based on conservative understanding of Xiaohongshu risk control (mass liking/instant likes/batch follows are high-
+risk areas); they are empirical values.
+Users may lower them according to their own account status; raising them is never recommended.
 """
 
 from __future__ import annotations
@@ -23,22 +24,22 @@ from typing import Optional
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
 except ImportError:
-    from backports.zoneinfo import ZoneInfo  # 3.8 回退包（pip install backports.zoneinfo）
+    from backports.zoneinfo import ZoneInfo  # 3.8 fallback package (pip install backports.zoneinfo)
 
-# 每日上限（保守；真人重度用户的零头，给足安全垫）
+# Daily caps (conservative; a fraction of a heavy real user, giving ample safety margin)
 DEFAULT_LIMITS = {"like": 150, "follow": 30, "collect": 80, "comment": 20}
-# 两次同类互动的最小间隔（秒）——防秒赞/规律节奏
+# Minimum interval between two interactions of the same type (seconds) — prevents instant likes / regular rhythm
 MIN_GAP = {"like": 25, "follow": 120, "collect": 40, "comment": 180}
 
 
-# 时段定义（本地小时 → 场景）。深夜低谷：2~6 点；高峰：7~9、12~14、18~23
+# Time slot definitions (local hour -> scenario). Deep-night trough: 2~6; peaks: 7~9, 12~14, 18~23
 _TIME_SLOTS = {
-    "deep_night": range(2, 6),   # 2:00~5:59 深夜：几乎没真人，强烈不建议互动
-    "night":      range(0, 2),   # 0:00~1:59 后半夜：低流量
-    "morning":    range(6, 12),  # 6:00~11:59 早晨/上午高峰
-    "noon":       range(12, 15), # 12:00~14:59 午间高峰
-    "afternoon":  range(15, 18), # 15:00~17:59 下午平稳
-    "evening":    range(18, 24), # 18:00~23:59 晚间黄金高峰
+    "deep_night": range(2, 6),   # 2:00~5:59 deep night: almost no real users, strongly discouraged
+    "night":      range(0, 2),   # 0:00~1:59 late night: low traffic
+    "morning":    range(6, 12),  # 6:00~11:59 morning peak
+    "noon":       range(12, 15), # 12:00~14:59 midday peak
+    "afternoon":  range(15, 18), # 15:00~17:59 stable afternoon
+    "evening":    range(18, 24), # 18:00~23:59 evening prime peak
 }
 
 
@@ -47,17 +48,17 @@ class Policy:
                  limits: Optional[dict[str, int]] = None, conservative: bool = False,
                  platform_tz: str = "Asia/Shanghai") -> None:
         """
-        platform_tz — 目标平台所在时区（IANA 名称）。
-            默认 "Asia/Shanghai"（小红书等国内平台）。
-            海外用户（如东京）操作国内平台时，依然应该填 "Asia/Shanghai"，
-            因为判断的是"平台用户活跃时段"，而非操作者本地时间。
+        platform_tz — IANA time zone of the target platform.
+            Default "Asia/Shanghai" (for domestic platforms like Xiaohongshu).
+            Overseas users (e.g., Tokyo) operating a domestic platform should still use "Asia/Shanghai",
+            because what matters is the "platform user active hours", not the operator's local time.
         """
         self.path = os.path.expanduser(state_path)
         self.limits = dict(limits or DEFAULT_LIMITS)
-        if conservative:                         # 新号/冷启动期：上限砍到 1/3
+        if conservative:                         # new account / cold-start period: cut caps to 1/3
             self.limits = {k: max(1, v // 3) for k, v in self.limits.items()}
-        self._counts: dict[str, int] = {}     # action -> 今日次数
-        self._last: dict[str, float] = {}      # action -> 上次时间戳
+        self._counts: dict[str, int] = {}     # action -> today's count
+        self._last: dict[str, float] = {}      # action -> last timestamp
         self._date = str(date.today())
         self._platform_tz = ZoneInfo(platform_tz)
         self._load()
@@ -66,27 +67,27 @@ class Policy:
         try:
             with open(self.path) as f:
                 d = json.load(f)
-            if d.get("date") == self._date:      # 仅同一天继承计数；跨天自动归零
+            if d.get("date") == self._date:      # only inherit counts for the same day; auto-reset across days
                 self._counts = d.get("counts", {})
                 self._last = d.get("last", {})
         except Exception:
-            pass                                 # 不存在/损坏 → 当天从零开始
+            pass                                 # missing/corrupt -> start today from zero
 
     def _save(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"date": self._date, "counts": self._counts, "last": self._last}, f)
-        os.replace(tmp, self.path)               # 原子写，防中断损坏
+        os.replace(tmp, self.path)               # atomic write, prevents corruption from interruption
 
     def can(self, action: str) -> bool:
-        """今日未超限 且 距上次该动作已过最小间隔 才允许。"""
+        """Allowed only if today's cap is not exceeded and the minimum gap since the last same action has elapsed."""
         if self._counts.get(action, 0) >= self.limits.get(action, 0):
             return False
         return (time.time() - self._last.get(action, 0)) >= MIN_GAP.get(action, 0)
 
     def record(self, action: str) -> None:
-        """确认互动生效后才调用：计数 +1、记时间戳、立即持久化。"""
+        """Call only after confirming the interaction took effect: increment count, record timestamp, persist immediately."""
         self._counts[action] = self._counts.get(action, 0) + 1
         self._last[action] = time.time()
         self._save()
@@ -95,16 +96,16 @@ class Policy:
         return {k: self.limits[k] - self._counts.get(k, 0) for k in self.limits}
 
     def exhausted(self) -> bool:
-        """所有动作都到顶了 → loop 该收工。"""
+        """All actions are at cap -> the loop should call it a day."""
         return all(self._counts.get(k, 0) >= self.limits[k] for k in self.limits)
 
     def summary(self) -> str:
         return " | ".join(f"{k} {self._counts.get(k,0)}/{self.limits[k]}" for k in self.limits)
 
-    # ── 时段感知：判断当前是否适合互动 ──────────────────────────────
+    # ── time-slot awareness: determine whether now is suitable for interacting ──────────────────────────────
 
     def current_slot(self) -> str:
-        """返回平台时区下当前所属时段名称（deep_night/night/morning/noon/afternoon/evening）。"""
+        """Return the current slot name in the platform time zone (deep_night/night/morning/noon/afternoon/evening)."""
         now = datetime.now(tz=self._platform_tz)
         h = now.hour
         for slot, hrs in _TIME_SLOTS.items():
@@ -114,18 +115,19 @@ class Policy:
 
     def is_active_hour(self) -> bool:
         """
-        判断当前时段是否适合互动。
-        深夜（2~6 点平台时间）返回 False——这段时间真人极少，任何互动都很显眼。
+        Determine whether the current time slot is suitable for interacting.
+        Deep night (2~6 a.m. platform time) returns False — during this period real users are extremely few, so any interaction is
+        very conspicuous.
         """
         return self.current_slot() != "deep_night"
 
     def interact_prob_multiplier(self) -> float:
         """
-        根据时段返回 interact_prob 的缩放系数，供 mirage_loop 使用。
-          - deep_night（2~6）：0.0（完全不互动，只浏览或直接歇）
-          - night（0~2）：0.3（极低调）
-          - morning/noon/evening 高峰：1.0（正常）
-          - afternoon 平稳期：0.8（略降）
+        Return a scaling factor for interact_prob based on the time slot, for use by mirage_loop.
+          - deep_night (2~6): 0.0 (no interaction at all, just browse or rest)
+          - night (0~2): 0.3 (extremely low-key)
+          - morning/noon/evening peak: 1.0 (normal)
+          - afternoon stable period: 0.8 (slightly reduced)
         """
         slot = self.current_slot()
         return {

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mirage-antidetect"
 version = "0.6.0"
-description = "给 MediaCrawler 打入五层反检测加固 + 拟人互动引擎的工具集（仅供学习研究）"
+description = "Behavior-layer anti-detection hardening for MediaCrawler, plus a human-like interaction engine and a soft-ban early-warning radar (research use only)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Non-Commercial / Research-Only" }
@@ -20,35 +20,38 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/millennialdreamer/mirage"
 
-# 核心 CLI（apply/doctor）零额外依赖；只有指纹自检/benchmark 需要浏览器。
+# The core CLI (apply / doctor / canary / radar / profile) has zero third-party deps.
+# Only fingerprint verification needs a browser driver.
 [project.optional-dependencies]
-browser = ["patchright>=1.40"]        # 推荐：Playwright 的 drop-in 补丁版，补 CDP Runtime.Enable 泄漏
-browser-plain = ["playwright>=1.40"]  # 退路：原生 Playwright（有 CDP 泄漏，注入脚本补不了）
+browser = ["patchright>=1.40"]        # preferred: drop-in Playwright patch, closes the CDP Runtime.Enable leak
+browser-plain = ["playwright>=1.40"]  # fallback: stock Playwright (CDP leak remains; injected scripts cannot fix it)
 
 [project.scripts]
 mirage = "mirage.cli:main"
 
-# 关键：把 scripts/ 目录映射成 mirage 包，**不物理重命名目录** ——
-# 既保住 Claude Code skill 的 scripts/ 结构，又能 pip install。
+# Map scripts/ onto the `mirage` package WITHOUT renaming the directory: keeps the flat
+# scripts/ layout that the Claude Code skill expects, while still being pip-installable.
 [tool.setuptools]
 packages = ["mirage"]
 
 [tool.setuptools.package-dir]
 mirage = "scripts"
 
-# weekly_maintenance.sh 等非 .py 不打进包（包内只留 Python 模块）
+# Keep non-.py files (weekly_maintenance.sh etc.) out of the built package.
 [tool.setuptools.exclude-package-data]
 mirage = ["*.sh"]
 
 [tool.ruff]
-line-length = 140                   # 容纳刻意对齐的评分表/字典行
+line-length = 160                   # English prose runs longer than the original Chinese;
+                                    # also leaves room for the deliberately aligned scoring tables
 target-version = "py39"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]      # 错误/未用/警告/import 排序
-ignore = ["E402", "E731"]          # 模块级 import 顺序(三语境 fallback 有意延迟)、lambda 赋值(评分模型用)
+select = ["E", "F", "W", "I"]      # errors / unused / warnings / import sorting
+ignore = ["E402", "E731"]          # E402: three-context import fallbacks are deliberately late
+                                   # E731: lambdas are used as the scoring model
 
 [tool.mypy]
-ignore_missing_imports = true       # playwright/zoneinfo 等可选依赖不强制
+ignore_missing_imports = true       # optional deps (playwright / zoneinfo) are not required
 warn_unused_ignores = false
-disable_error_code = ["no-redef"]   # try/except import fallback 同名重定义是合法模式，非 bug
+disable_error_code = ["no-redef"]   # try/except import fallbacks legitimately redefine names

@@ -1,60 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-桥接快速参考 —— 对接海内外主流平台的**活维护 clean-API 栈**最小正确模板。
+Bridge quick reference —— minimal correct template for the **actively maintained clean-API stack** targeting mainstream platforms at
+home and abroad.
 
-原则（和 douyin_signature_bridge.py 一致）：
-  - 只给**活维护 + API 干净**的栈写模板（yt-dlp / PRAW / Telethon / instagrapi）。
-  - 国内电商/美团/招聘那些**偏旧 crack 库不写虚模板**（见 docs/platform-coverage.md 的新鲜度标注，用前自核对）。
-  - 这些都属 MediaCrawler/Mirage 行为层**之外**的请求层；Mirage 只给模板，不接管、不保证上游兼容。
+Principles (consistent with douyin_signature_bridge.py):
+  - Only write templates for **actively maintained + clean API** stacks (yt-dlp / PRAW / Telethon / instagrapi).
+  - Domestic e-commerce/Meituan/recruitment and other **outdated crack libraries are not given fake templates** (see freshness
+  annotations in docs/platform-coverage.md, verify before use).
+  - These all belong to the request layer **outside** the MediaCrawler/Mirage behavior layer; Mirage only provides templates, does not
+  take over, does not guarantee upstream compatibility.
 
-前置：按需 `pip install yt-dlp praw telethon instagrapi`。
-本文件全懒加载，无库也能 import/跑 __main__（只打印说明）。真跑需自备凭证、自己手动跑（AI 不代跑、不主动触发风控）。
+Prerequisites: `pip install yt-dlp praw telethon instagrapi` as needed.
+This file is fully lazy-loaded; it can be imported/run __main__ without the libraries (only prints instructions). To actually run,
+supply your own credentials and run manually (AI does not run on your behalf, does not proactively trigger risk control).
 """
 from __future__ import annotations
 
 
 def youtube_or_cnvideo(url: str) -> dict:
-    """长视频：yt-dlp 一把梭，公开内容零账号风险。
-    ⚠️ extract_info 可能返回 None/抛异常，要 try；部分站(B站等)需传 cookies；
-       优酷/芒果 TV 有 DRM、yt-dlp 支持差——主要是 YouTube/爱奇艺/腾讯部分可用，别过度指望国产长视频。"""
+    """Long video: yt-dlp one shot, public content has zero account risk.
+    ⚠️ extract_info may return None/raise; wrap in try; some sites (Bilibili etc.) require cookies;
+       Youku/Mango TV have DRM, yt-dlp support is poor — mainly YouTube/iQIYI/Tencent partially usable, don't over-rely on domestic long video."""
     import yt_dlp
     with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
-        return ydl.extract_info(url, download=False)      # 只取元数据；download=True 才下
+        return ydl.extract_info(url, download=False)      # metadata only; download=True actually downloads
 
 
 def reddit_hot(subreddit: str, client_id: str, client_secret: str, ua: str, limit: int = 10):
-    """Reddit：官方 API wrapper PRAW。只传 id/secret/ua = read-only 模式，读公开 subreddit 够用。
-    ⚠️ 需先去 reddit.com/prefs/apps 注册 script app；2026 起未登录调用限速更严，备好指数退避。"""
+    """Reddit: official API wrapper PRAW. Passing only id/secret/ua = read-only mode, enough for public subreddits.
+    ⚠️ Register a script app first at reddit.com/prefs/apps; from 2026 rate limits for unauthenticated calls are stricter, prepare exponential backoff."""
     import praw
     reddit = praw.Reddit(client_id=client_id, client_secret=client_secret, user_agent=ua)
     return [(p.title, p.score, p.url) for p in reddit.subreddit(subreddit).hot(limit=limit)]
 
 
 async def telegram_channel_messages(channel: str, api_id: int, api_hash: str, limit: int = 100):
-    """Telegram：官方 MTProto 库 Telethon（api_id/api_hash 从 my.telegram.org 拿）。异步。
-    ⚠️ 首次运行会卡在交互式登录(要手机号+验证码)——**先手动跑一次**生成 mirage_session.session，
-       之后才能自动化。别指望这段在无人值守下直接跑通。"""
+    """Telegram: official MTProto library Telethon (get api_id/api_hash from my.telegram.org). Async.
+    ⚠️ First run will stall at interactive login (requires phone number + verification code) — **run once manually** to generate
+    mirage_session.session,
+       only then can it be automated. Don't expect this snippet to run unattended directly."""
     from telethon import TelegramClient
     async with TelegramClient("mirage_session", api_id, api_hash) as client:
         return [m.text async for m in client.iter_messages(channel, limit=limit)]
 
 
 def instagram_user_medias(username: str, login_user: str, login_pw: str, amount: int = 20):
-    """Instagram：instagrapi（private API，活维护 2026-07 仍发版；只用小号、低频）。
-    ⚠️ **必须** cl.dump_settings()/load_settings() 持久化登录态——频繁 login 必触发 challenge(验证码/邮件)甚至封号；
-       生产要配 cl.challenge_code_handler。这是最小示例，别裸用。"""
+    """Instagram: instagrapi (private API, actively maintained, still released as of 2026-07; use alt account only, low frequency).
+    ⚠️ **Must** persist login state with cl.dump_settings()/load_settings() — frequent login will trigger challenge (verification
+    code/email) or even ban;
+       production should configure cl.challenge_code_handler. This is a minimal example, don't use raw."""
     from instagrapi import Client
     cl = Client()
-    cl.login(login_user, login_pw)                        # 建议配合 session 持久化，别每次登
+    cl.login(login_user, login_pw)                        # preferably combine with session persistence, don't log in every time
     return cl.user_medias(cl.user_id_from_username(username), amount)
 
 
-# —— 音乐 / 图集：CLI 工具直接用，无需写桥接 ——
-#   音乐（网易云/QQ/酷狗…数十家）：pip install musicdl  →  musicdl 命令行搜索下载
-#   图集（Pinterest 等）：pip install gallery-dl        →  gallery-dl <url>
+# —— Music / image collections: use CLI tools directly, no bridge needed ——
+#   Music (NetEase Cloud/QQ/Kugou... dozens of sites): pip install musicdl  →  musicdl command-line search & download
+#   Image collections (Pinterest etc.): pip install gallery-dl        →  gallery-dl <url>
 
 
 if __name__ == "__main__":
     print(__doc__)
-    print(">> 这是最小正确模板。按需 pip install，自备凭证，对照各库最新文档核对后**手动**调用。")
-    print(">> 偏旧的国内 crack 库（淘宝/美团/招聘）不在此写模板 —— 见 docs/platform-coverage.md。")
+    print(">> Minimal correct templates. pip install what you need, supply your own")
+    print(">> credentials, check each library's current docs, and call them **manually**.")
+    print(">> Outdated domestic crack libraries (Taobao/Meituan/recruitment) are not templated here — see docs/platform-coverage.md.")

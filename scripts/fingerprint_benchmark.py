@@ -1,28 +1,36 @@
 # -*- coding: utf-8 -*-
 """
-fingerprint_benchmark.py — 加固前/后浏览器指纹的**相对基准分**（不是"证据"，看清下面的诚实边界）。
+fingerprint_benchmark.py — relative baseline score of browser fingerprint before/after hardening (not "evidence", see honest
+boundaries below).
 
-⚠️ 诚实边界（红队多方审后修正，别再吹"可证明"）：
-   1. 本分只测 **7 个基础信号**（webdriver/plugins/UA/languages/webgl-renderer/window/chrome），
-      **在 about:blank 上测** —— Canvas/WebGL 像素指纹、字体枚举、CDP `Runtime.Enable` 泄漏、
-      JA3 传输层等**深层维度全都没测**。低分只说明"挡住了低端现成检测"，≠ 真能骗过平台风控。
-   2. `--self-test` 用的是 **MOCK 硬编指纹**，只验证"评分逻辑对不对"，**不是真实证据**。
-   3. 加固的 L1 靠 `stealth.min.js`，那是 **2023-03 停更版**，只挡 off-the-shelf 检测。
-   → 想要**真实证据**：用 `--detect-url` 打开真检测页(默认 bot.sannysoft.com)亲眼看，或去 CreepJS/BrowserScan。
+⚠️ Honest boundaries (red-team multi-review corrected, stop saying "provable"):
+   1. This score only tests **7 basic signals** (webdriver/plugins/UA/languages/webgl-renderer/window/chrome),
+      **on about:blank** — Canvas/WebGL pixel fingerprints, font enumeration, CDP `Runtime.Enable` leaks,
+      JA3 transport layer and other deep dimensions are **not tested at all**. A low score only means "blocked low-end off-the-shelf
+      detection", ≠ really able to fool platform risk control.
+   2. `--self-test` uses **MOCK hardcoded fingerprints**, only validates the scoring logic, **not real evidence**.
+   3. Hardening L1 relies on `stealth.min.js`, which is a **2023-03 discontinued version**, only blocks off-the-shelf detection.
+   → For **real evidence**: use `--detect-url` to open a real detection page (default bot.sannysoft.com) and see with your own eyes,
+   or go to CreepJS/BrowserScan.
 
-定位：verify_stealth.py 快速自检；本脚本给相对基准分 + 通往真实检测页的入口。真跑请 boss 手动，AI 不代跑。
+Positioning: verify_stealth.py is a quick self-check; this script gives relative baseline score + entry to real detection pages. For
+real runs, please run manually, AI does not run on behalf.
 
-用法：
-    python fingerprint_benchmark.py --self-test                        # 只测评分逻辑(MOCK,无浏览器,非证据)
-    python fingerprint_benchmark.py --stealth ../libs/stealth.min.js   # 加固前后 7 信号相对基准(开窗口)
-    python fingerprint_benchmark.py --detect-url                       # ⭐真检测页(解析真实通过率+全页截图)
-    python fingerprint_benchmark.py --botd                             # ⭐第三方 BotD 确定性判定(bot/botKind)
+Usage:
+    python fingerprint_benchmark.py --self-test                        # only test scoring logic (MOCK, no browser, not evidence)
+    python fingerprint_benchmark.py --stealth ../libs/stealth.min.js   # relative baseline of 7 signals before/after hardening
+    (opens window)
+    python fingerprint_benchmark.py --detect-url                       # ⭐ real detection page (parse real pass rate + full-page
+    screenshot)
+    python fingerprint_benchmark.py --botd                             # ⭐ third-party BotD deterministic verdict (bot/botKind)
 
-三种模式的证据强度：--botd / --detect-url（第三方判的，真）> 本地 7 信号 BotScore（自打的，弱）
-> --self-test（MOCK，只验评分逻辑，不是证据）。
-驱动优先用 patchright（补 CDP Runtime.Enable 泄漏，注入脚本补不了这层），没装退回 playwright。
+Evidence strength of three modes: --botd / --detect-url (third-party verdict, real) > local 7-signal BotScore (self-scored, weak)
+> --self-test (MOCK, only validates scoring logic, not evidence).
+Driver preference: patchright (patches CDP Runtime.Enable leak; injection scripts cannot patch this layer), fallback to playwright
+if not installed.
 
-依赖：playwright（仅真跑需要；--self-test 不需要）。BotScore 0~100，越高越像机器人（仅 7 基础信号相对分）。
+Dependencies: playwright (only needed for real runs; --self-test doesn't need it). BotScore 0~100, higher = more like a bot (only
+relative score of 7 basic signals).
 """
 import argparse
 import asyncio
@@ -31,7 +39,7 @@ import os
 import sys
 import time
 
-# 采集指纹的 JS（自包含、不依赖外部检测页；async 以便查权限一致性）
+# Fingerprint-collecting JS (self-contained, no external detection page dependency; async to check permission consistency)
 EXTENDED_CHECK_JS = r"""() => {
   const out = {
     webdriver: navigator.webdriver,
@@ -57,19 +65,22 @@ EXTENDED_CHECK_JS = r"""() => {
   return out;
 }"""
 
-# 评分模型：每个维度命中"机器人特征"的扣分权重。BotScore = 命中权重和 / 总权重 * 100。
-# 权重是经验判断：webdriver/headless-UA 是硬特征给高权重，软渲染等给低权重。
-# 经国产 QA 审 + 终审裁决：移除了易在真人浏览器误报的 permMismatch，补入低误报的 languages；
-# webdriver 30→25 配合多维度稀释，避免"单特征定生死"。全部维度均为低误报硬特征。
+# Scoring model: each dimension hits a "bot feature" with a deduction weight. BotScore = sum of hit weights / total weight * 100.
+# Weights are empirical: webdriver/headless-UA are hard features given high weight, soft rendering etc. given low weight.
+# After local QA review + final ruling: removed permMismatch which easily false-positived on real browsers, added low-false-positive
+# languages;
+# webdriver 30→25 with multi-dimension dilution to avoid "single feature decides life or death". All dimensions are low-false-
+# positive hard features.
 SIGNALS = [
-    ("webdriver",  lambda fp: bool(fp.get("webdriver")),                          25, "navigator.webdriver=true（头号机器人特征）"),
-    ("headlessUA", lambda fp: "headless" in str(fp.get("ua", "")).lower(),        18, "UserAgent 含 HeadlessChrome"),
-    ("plugins",    lambda fp: int(fp.get("plugins", 0)) == 0,                     14, "navigator.plugins 为空"),
-    ("languages",  lambda fp: not str(fp.get("languages", "")).strip(),           12, "navigator.languages 为空（无头常见）"),
+    ("webdriver",  lambda fp: bool(fp.get("webdriver")),                          25, "navigator.webdriver=true (top bot feature)"),
+    ("headlessUA", lambda fp: "headless" in str(fp.get("ua", "")).lower(),        18, "UserAgent contains HeadlessChrome"),
+    ("plugins",    lambda fp: int(fp.get("plugins", 0)) == 0,                     14, "navigator.plugins is empty"),
+    ("languages",  lambda fp: not str(fp.get("languages", "")).strip(),           12, "navigator.languages is empty (common in headless)"),
     ("webglSW",    lambda fp: any(s in str(fp.get("webglRenderer", "")).lower()
-                                  for s in ("swiftshader", "llvmpipe", "software")), 11, "WebGL 软渲染（无真实 GPU）"),
-    ("chrome",     lambda fp: not fp.get("hasChrome"),                            10, "window.chrome 缺失（非真实 Chrome 嫌疑）"),
-    ("outerZero",  lambda fp: int(fp.get("outerWidth", 1)) == 0 or int(fp.get("outerHeight", 1)) == 0, 10, "窗口外尺寸为 0（无头特征）"),
+                                  for s in ("swiftshader", "llvmpipe", "software")), 11, "WebGL software rendering (no real GPU)"),
+    ("chrome",     lambda fp: not fp.get("hasChrome"),                            10, "window.chrome missing (suspected not real Chrome)"),
+    ("outerZero",  lambda fp: int(fp.get("outerWidth", 1)) == 0
+                              or int(fp.get("outerHeight", 1)) == 0,                   10, "window outer size is 0 (headless)"),
 ]
 MAX_WEIGHT = sum(w for _, _, w, _ in SIGNALS)   # = 100
 
@@ -82,7 +93,7 @@ def _safe(fn, fp):
 
 
 def score_fingerprint(fp):
-    """返回 (botscore 0~100, 命中的特征列表[(key,weight,why)])。"""
+    """Return (botscore 0~100, list of hit features [(key,weight,why)])."""
     hits = [(k, w, why) for (k, fn, w, why) in SIGNALS if _safe(fn, fp)]
     raw = sum(w for _, w, _ in hits)
     botscore = round(raw / MAX_WEIGHT * 100)
@@ -90,18 +101,18 @@ def score_fingerprint(fp):
 
 
 def risk_level(botscore):
-    """把 BotScore 映射成风险等级，避免对绝对数字过度解读。"""
-    return "低" if botscore <= 20 else ("中" if botscore <= 50 else "高")
+    """Map BotScore to a risk level, to avoid over-interpreting absolute numbers."""
+    return "Low" if botscore <= 20 else ("Medium" if botscore <= 50 else "High")
 
 
-DISCLAIMER = ("本 BotScore 只测 7 个基础信号、在 about:blank 上跑，是相对基准分，**不是真实证据**——"
-              "Canvas/WebGL 像素、字体枚举、CDP Runtime.Enable 泄漏、JA3 等深层全没测；"
-              "低分只说明挡住了低端现成检测。stealth.min.js 为 2023-03 停更版。"
-              "真实证据请用 --detect-url 去真检测页(CreepJS/BrowserScan)亲眼看。")
+DISCLAIMER = ("This BotScore only tests 7 basic signals, runs on about:blank, is a relative baseline score, **not real evidence** — "
+              "Canvas/WebGL pixels, font enumeration, CDP Runtime.Enable leak, JA3 and other deep layers are all untested; "
+              "a low score only means it blocked low-end off-the-shelf detection. stealth.min.js is the 2023-03 discontinued version. "
+              "For real evidence, use --detect-url to go to a real detection page (CreepJS/BrowserScan) and see with your own eyes.")
 
 
 def render_report(fp_plain, fp_stealth):
-    """打印对比 + 返回可存档的报告 dict。"""
+    """Print comparison + return an archivable report dict."""
     bs_p, hits_p = score_fingerprint(fp_plain)
     bs_s, hits_s = score_fingerprint(fp_stealth)
 
@@ -112,21 +123,21 @@ def render_report(fp_plain, fp_stealth):
         for _, w, why in hits:
             print(f"    ⚠ (+{w}) {why}")
         if not hits:
-            print("    ✓ 未命中任何机器人特征")
+            print("    ✓ No bot-like features hit")
 
-    block("对照组 · 未加固", fp_plain, bs_p, hits_p)
-    block("实验组 · 已加固", fp_stealth, bs_s, hits_s)
+    block("Control · unhardened", fp_plain, bs_p, hits_p)
+    block("Experiment · hardened", fp_stealth, bs_s, hits_s)
 
     drop = bs_p - bs_s
-    print("\n═══ 结论（7 信号相对基准，非真实证据）═══")
-    print(f"  BotScore：{bs_p} → {bs_s}  （降低 {drop} 分，越低越像真人）")
-    print(f"  风险等级：对照组【{risk_level(bs_p)}】→ 实验组【{risk_level(bs_s)}】")
+    print("\n═══ Conclusion (7-signal relative baseline, not real evidence) ═══")
+    print(f"  BotScore: {bs_p} → {bs_s}  (dropped {drop} points, lower = more human-like)")
+    print(f"  Risk level: Control【{risk_level(bs_p)}】→ Experiment【{risk_level(bs_s)}】")
     if drop >= 40:
-        print("  ✓ 加固显著有效：抹掉了大部分机器人特征")
+        print("  ✓ Hardening significantly effective: most bot features erased")
     elif drop > 0:
-        print("  ~ 加固部分有效：仍有残留特征，建议核对 stealth.min.js 是否最新")
+        print("  ~ Hardening partially effective: residual features remain, check whether stealth.min.js is up to date")
     else:
-        print("  ⚠ 加固未见效：请检查 stealth 是否正确注入")
+        print("  ⚠ Hardening no effect: check whether stealth was injected correctly")
     print(f"  ⚠ {DISCLAIMER}")
 
     return {
@@ -163,7 +174,7 @@ async def _run(stealth_path, headless):
     return fp_plain, fp_stealth
 
 
-# —— 自测用 mock 指纹：典型「裸 headless Chromium」与「加固后真 Chrome」——
+# --- Self-test mock fingerprints: typical 'bare headless Chromium' and 'hardened real Chrome' ---
 MOCK_PLAIN = {
     "webdriver": True, "plugins": 0, "hasChrome": False, "languages": "",
     "ua": "Mozilla/5.0 ... HeadlessChrome/120.0 ...", "webglRenderer": "Google SwiftShader",
@@ -177,30 +188,31 @@ MOCK_STEALTH = {
 
 
 def self_test():
-    """无浏览器验证评分逻辑：裸指纹应高分、加固指纹应低分、改善显著。"""
+    """No-browser validation of scoring logic: bare fingerprint should score high, hardened fingerprint low, improvement significant."""
     bs_p, _ = score_fingerprint(MOCK_PLAIN)
     bs_s, _ = score_fingerprint(MOCK_STEALTH)
-    assert bs_p >= 80, f"裸指纹 BotScore 应 ≥80，实际 {bs_p}"
-    assert bs_s <= 15, f"加固指纹 BotScore 应 ≤15，实际 {bs_s}"
-    assert bs_p - bs_s >= 60, f"改善应 ≥60，实际 {bs_p - bs_s}"
+    assert bs_p >= 80, f"Bare fingerprint BotScore should be ≥80, got {bs_p}"
+    assert bs_s <= 15, f"Hardened fingerprint BotScore should be ≤15, got {bs_s}"
+    assert bs_p - bs_s >= 60, f"Improvement should be ≥60, got {bs_p - bs_s}"
     rep = render_report(MOCK_PLAIN, MOCK_STEALTH)
     assert rep["improvement"] == bs_p - bs_s
     assert {"botscore", "flags", "fp", "risk_level"} <= set(rep["plain"])
-    assert rep["disclaimer"], "报告必须带免责声明"
-    assert rep["plain"]["risk_level"] == "高" and rep["stealth"]["risk_level"] == "低"
+    assert rep["disclaimer"], "Report must carry a disclaimer"
+    assert rep["plain"]["risk_level"] == "High" and rep["stealth"]["risk_level"] == "Low"
     assert isinstance(rep["stealth"]["flags"], list)
-    # 单调性：去掉一个特征，分数必须下降
+    # Monotonicity: removing a feature must lower the score
     less = dict(MOCK_PLAIN)
     less["webdriver"] = False
-    assert score_fingerprint(less)[0] < bs_p, "去掉 webdriver 后分应下降"
-    print("\n🎉 self-test 通过：评分逻辑对（单调 / 裸高加固低 / 报告结构完整）。")
-    print("⚠ 但这是 MOCK 硬编指纹，只验证评分逻辑——**不是真实证据**。真证据用 --detect-url 去真检测页。")
+    assert score_fingerprint(less)[0] < bs_p, "Score should drop after removing webdriver"
+    print("\n🎉 self-test passed: scoring logic correct (monotonic / bare high hardened low / report structure complete).")
+    print("⚠ MOCK fingerprints — this validates the scoring logic only, it is NOT evidence.")
+    print("  For real evidence run --detect-url (real detection page) or --botd.")
 
 
 def _load_playwright():
-    """优先用 patchright（Playwright 的 drop-in 补丁版，补掉 CDP `Runtime.Enable` /
-    `Console.enable` 泄漏——这是 stealth.min.js 这类注入脚本**原理上补不了**的驱动层泄漏）。
-    没装则退回原生 playwright。返回 (async_playwright, 实现名)。"""
+    """Prefer patchright (a drop-in patched version of Playwright that patches CDP `Runtime.Enable` /
+    `Console.enable` leaks — driver-layer leaks that injection scripts like stealth.min.js **cannot patch in principle**).
+    Fall back to vanilla playwright if not installed. Returns (async_playwright, implementation name)."""
     try:
         from patchright.async_api import async_playwright
         return async_playwright, "patchright"
@@ -210,12 +222,12 @@ def _load_playwright():
         from playwright.async_api import async_playwright
         return async_playwright, "playwright"
     except ImportError:
-        sys.exit("✗ 未装浏览器驱动。推荐 pip install patchright（补 CDP 泄漏）"
-                 "或 pip install playwright；然后 <驱动> install chromium")
+        sys.exit("✗ Browser driver not installed. Recommend pip install patchright (patches CDP leaks) "
+                 "or pip install playwright; then <driver> install chromium")
 
 
-# bot.sannysoft.com 的结果表：每个测试项一个 td.result，通过=.passed 失败=.failed，
-# 关键项还有稳定 id（#webdriver-result 等）。这是能拿到**真实通过率**的检测页。
+# bot.sannysoft.com result table: one td.result per test item, passed=.passed failed=.failed,
+# key items also have stable ids (#webdriver-result etc.). This is a detection page where you can get a **real pass rate**.
 SANNYSOFT_JS = r"""() => {
   const cells = Array.from(document.querySelectorAll('td.result'));
   const passed = cells.filter(c => c.classList.contains('passed')).length;
@@ -233,8 +245,8 @@ SANNYSOFT_JS = r"""() => {
   };
 }"""
 
-# FingerprintJS 官方开源 BotD（MIT）：纯客户端判定自动化框架，返回 {bot, botKind}。
-# 离线确定性判定，比自打 7 分靠谱得多。botKind 例：headless_chrome / selenium / electron。
+# FingerprintJS official open-source BotD (MIT): pure client-side automation framework detection, returns {bot, botKind}.
+# Deterministic offline verdict, much more reliable than self-scored 7 signals. botKind examples: headless_chrome / selenium / electron.
 BOTD_JS = r"""async () => {
   try {
     const Botd = await import('https://openfpcdn.io/botd/v2');
@@ -248,9 +260,10 @@ BOTD_JS = r"""async () => {
 
 
 async def _run_botd(headless, stealth_path):
-    """本地注入 BotD 做确定性机器人判定（需联网取 CDN 模块，但判定在本地跑）。"""
+    """Inject BotD locally for deterministic bot detection (needs network for CDN module, but detection runs locally)."""
     apw, impl = _load_playwright()
-    print(f"  驱动实现：{impl}{'（已补 CDP 泄漏）' if impl == 'patchright' else '（建议装 patchright 补 CDP 泄漏）'}")
+    _note = " (CDP leak patched)" if impl == "patchright" else " (install patchright to patch the CDP leak)"
+    print(f"  Driver: {impl}{_note}")
     async with apw() as p:
         browser = await p.chromium.launch(headless=headless)
         ctx = await browser.new_context()
@@ -261,19 +274,21 @@ async def _run_botd(headless, stealth_path):
         res = await page.evaluate(BOTD_JS)
         await browser.close()
     if not res.get("ok"):
-        print(f"  ⚠ BotD 加载失败（{res.get('error')}）——需要能访问 openfpcdn.io")
+        print(f"  ⚠ BotD failed to load ({res.get('error')}) — need access to openfpcdn.io")
         return res
     if res["bot"]:
-        print(f"  🤖 BotD 判定：**是机器人**（botKind={res['botKind']}）—— 加固没骗过它")
+        print(f"  🤖 BotD verdict: **is a bot** (botKind={res['botKind']}) — hardening didn't fool it")
     else:
-        print("  ✓ BotD 判定：不是机器人（这是第三方开源检测器的真实判定，比 7 信号自打分有力）")
+        print("  ✓ BotD verdict: not a bot")
+        print("    (third-party open-source detector — stronger evidence than the local 7-signal score)")
     return res
 
 
 async def _run_detect(url, stealth_path, headless):
-    """打开真实检测页(注入 stealth)：解析该页**真实通过率** + 采 7 信号 + 全页截图。"""
+    """Open real detection page (inject stealth): parse the page's **real pass rate** + collect 7 signals + full-page screenshot."""
     async_playwright, impl = _load_playwright()
-    print(f"  驱动实现：{impl}{'（已补 CDP 泄漏）' if impl == 'patchright' else '（建议装 patchright 补 CDP 泄漏）'}")
+    _note = " (CDP leak patched)" if impl == "patchright" else " (install patchright to patch the CDP leak)"
+    print(f"  Driver: {impl}{_note}")
     shot = os.path.expanduser(f"~/.mirage/detect_{int(time.time())}.png")
     os.makedirs(os.path.dirname(shot), exist_ok=True)
     async with async_playwright() as p:
@@ -283,7 +298,7 @@ async def _run_detect(url, stealth_path, headless):
             await ctx.add_init_script(path=stealth_path)
         page = await ctx.new_page()
         await page.goto(url, wait_until="networkidle")
-        await page.wait_for_timeout(2500)        # 等异步检测项渲染完（fp2 表是异步填的）
+        await page.wait_for_timeout(2500)        # Wait for async detection items to render (fp2 table is filled asynchronously)
         await page.screenshot(path=shot, full_page=True)
         fp = await page.evaluate(EXTENDED_CHECK_JS)
         sanny = None
@@ -293,37 +308,42 @@ async def _run_detect(url, stealth_path, headless):
             except Exception:
                 sanny = None
         if not headless:
-            await page.wait_for_timeout(6000)   # 留时间让你亲眼看
+            await page.wait_for_timeout(6000)   # Leave time for you to see with your own eyes
         await browser.close()
 
     if sanny and sanny.get("total"):
         rate = sanny["passed"] / sanny["total"] * 100
-        print(f"\n  ⭐真实通过率：{sanny['passed']}/{sanny['total']} = {rate:.0f}%（这是检测页自己判的，不是我自打的分）")
-        for k, label in (("webdriver", "navigator.webdriver"), ("advanced_webdriver", "高级 webdriver"),
+        print(f"\n  ⭐ Real pass rate: {sanny['passed']}/{sanny['total']} = {rate:.0f}%")
+        print("     (judged by the detection page itself — not a score this tool gives itself)")
+        for k, label in (("webdriver", "navigator.webdriver"), ("advanced_webdriver", "advanced webdriver"),
                          ("chrome", "window.chrome"), ("permissions", "permissions")):
             if sanny.get(k):
                 print(f"    {label}: {sanny[k]}")
         if rate < 100:
-            print(f"    ⚠ 有 {sanny['failed']} 项没过——截图里红/黄格子就是它们，逐项看才知道漏在哪。")
+            print(f"    ⚠ {sanny['failed']} item(s) failed — those are the red/yellow cells in the")
+            print("       screenshot. Go through them one by one to see what leaked.")
     bs, _ = score_fingerprint(fp)
-    print(f"\n  （参考）本地 7 信号 BotScore={bs}，webglRenderer={fp.get('webglRenderer')}")
-    print(f"  ⭐ 全页截图（Canvas/WebGL/字体等深层判定都在里面）：{shot}")
+    print(f"\n  (Reference) local 7-signal BotScore={bs}, webglRenderer={fp.get('webglRenderer')}")
+    print(f"  ⭐ Full-page screenshot (deep verdicts such as Canvas/WebGL/fonts are all in it): {shot}")
     print(f"  ⚠ {DISCLAIMER}")
     return {"fp": fp, "sannysoft": sanny, "screenshot": shot}
 
 
 def main():
-    ap = argparse.ArgumentParser(description="指纹相对基准分 + 真实检测页入口（真跑请手动；分数非证据）")
+    ap = argparse.ArgumentParser(
+        description="Relative fingerprint baseline + real detection-page entry "
+                    "(run the real ones manually; the local score is not evidence)")
     here = os.path.dirname(os.path.abspath(__file__))
     default_stealth = os.path.normpath(os.path.join(here, "..", "libs", "stealth.min.js"))
-    ap.add_argument("--stealth", default=default_stealth, help="stealth.min.js 路径")
-    ap.add_argument("--headless", action="store_true", help="无头运行（默认开窗口便于亲眼看）")
-    ap.add_argument("--self-test", action="store_true", help="只测评分逻辑，不启动浏览器")
-    ap.add_argument("--json", default="", help="把相对基准报告写到指定 JSON 路径")
+    ap.add_argument("--stealth", default=default_stealth, help="path to stealth.min.js")
+    ap.add_argument("--headless", action="store_true", help="run headless (default opens window so you can see with your own eyes)")
+    ap.add_argument("--self-test", action="store_true", help="only test scoring logic, no browser launched")
+    ap.add_argument("--json", default="", help="write relative baseline report to specified JSON path")
     ap.add_argument("--detect-url", nargs="?", const="https://bot.sannysoft.com/", default="",
-                    help="⭐去真实检测页(默认 bot.sannysoft.com)：解析该页真实通过率 + 全页截图")
+                    help="go to a real detection page (default bot.sannysoft.com): "
+                         "parse its real pass rate + full-page screenshot")
     ap.add_argument("--botd", action="store_true",
-                    help="⭐用 FingerprintJS 开源 BotD 做第三方确定性机器人判定(返回 bot/botKind)")
+                    help="⭐ use FingerprintJS open-source BotD for third-party deterministic bot detection (returns bot/botKind)")
     args = ap.parse_args()
 
     if args.self_test:
@@ -332,23 +352,24 @@ def main():
 
     if args.botd:
         sp = args.stealth if os.path.isfile(args.stealth) else None
-        print(f"用 BotD 做第三方机器人判定（stealth={'注入' if sp else '无'}）……")
+        print(f"Using BotD for third-party bot detection (stealth={'injected' if sp else 'none'})……")
         asyncio.run(_run_botd(args.headless, sp))
         return
 
     if args.detect_url:
         sp = args.stealth if os.path.isfile(args.stealth) else None
-        print(f"打开真实检测页 {args.detect_url}（stealth={'注入' if sp else '无'}）……亲眼看窗口结果")
+        print(f"Opening detection page {args.detect_url} "
+              f"(stealth={'injected' if sp else 'none'}) — check the window yourself")
         asyncio.run(_run_detect(args.detect_url, sp, args.headless))
         return
 
     stealth_path = args.stealth if os.path.isfile(args.stealth) else None
     if not stealth_path:
-        print(f"⚠ 找不到 stealth.min.js：{args.stealth}（实验组将退化为不注入，对比无意义）")
+        print(f"⚠ stealth.min.js not found: {args.stealth} (experiment group will degrade to no injection, comparison meaningless)")
     else:
-        print(f"使用 stealth：{stealth_path}（{os.path.getsize(stealth_path)//1024}KB）")
+        print(f"Using stealth: {stealth_path} ({os.path.getsize(stealth_path)//1024}KB)")
 
-    print("启动浏览器跑分中……（这是你手动发起的验证）")
+    print("Starting browser scoring…… (this is a manually initiated verification)")
     fp_plain, fp_stealth = asyncio.run(_run(stealth_path, args.headless))
     report = render_report(fp_plain, fp_stealth)
 
@@ -357,9 +378,9 @@ def main():
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
-        print(f"\n  相对基准报告已存：{out_path}（记住：7 信号相对分，非真实证据）")
+        print(f"\n  Relative baseline report saved: {out_path} (remember: 7-signal relative score, not real evidence)")
     except Exception as e:
-        print(f"\n  ⚠ 报告写盘失败（{e}），分数仍见上方")
+        print(f"\n  ⚠ Report write failed ({e}), score is still shown above")
 
 
 if __name__ == "__main__":

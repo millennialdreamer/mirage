@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-tests/test_apply_hardening.py — apply_hardening 幂等性单元测试
+tests/test_apply_hardening.py — apply_hardening idempotency unit tests
 
-运行方式：
+Run:
   python tests/test_apply_hardening.py
 
-测试覆盖：
-  - 对一份最小假 core.py 打补丁后，第二次打补丁零变化（幂等）
-  - 验证 MARK 标记确实被注入
-  - --dry-run 不落盘（文件内容不变）
+Coverage:
+  - After patching a minimal fake core.py, a second patch changes nothing (idempotent)
+  - Verify the MARK marker is actually injected
+  - --dry-run does not write to disk (file content unchanged)
 """
 
 import os
-import shutil
 import sys
 import tempfile
 
@@ -21,7 +20,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SCRIPTS = os.path.join(_ROOT, "scripts")
 sys.path.insert(0, _SCRIPTS)
 
-# apply_hardening 在导入时不做任何副作用，安全 import
+# apply_hardening has no side effects on import, safe to import
 import apply_hardening as ah
 
 _pass = 0
@@ -39,7 +38,7 @@ def check(name, cond, detail=""):
 
 
 # ────────────────────────────────────────────────────────────────────
-# 最小假 MediaCrawler 目录结构
+# Minimal fake MediaCrawler directory structure
 # ────────────────────────────────────────────────────────────────────
 FAKE_BASE_CONFIG = """\
 # fake base_config.py
@@ -52,7 +51,7 @@ HEADLESS = True
 SAVE_LOGIN_STATE = False
 """
 
-# core.py 最小有效版本：含 import asyncio / async def search / 固定 sleep 锚点
+# core.py minimal valid version: includes import asyncio / async def search / fixed sleep anchor
 FAKE_CORE = """\
 import asyncio
 
@@ -65,7 +64,7 @@ class XhsCrawler:
 """
 
 def make_fake_mc(tmpdir, platform="xhs"):
-    """在 tmpdir 下建最小 MediaCrawler 目录树。"""
+    """Build a minimal MediaCrawler directory tree under tmpdir."""
     pdir = ah.PLATFORMS[platform][0]
     cfg_dir = os.path.join(tmpdir, "config")
     media_dir = os.path.join(tmpdir, "media_platform", pdir)
@@ -82,84 +81,84 @@ def make_fake_mc(tmpdir, platform="xhs"):
     return {
         "base_config": base_cfg,
         "core": core,
-        "cdp": os.path.join(tools_dir, "cdp_browser.py"),   # 不存在，L1 会跳过
+        "cdp": os.path.join(tools_dir, "cdp_browser.py"),   # does not exist, L1 will skip
         "stealth": os.path.join(libs_dir, "stealth.min.js"),
         "platform": platform,
     }
 
 
 # ────────────────────────────────────────────────────────────────────
-# 测试：base_config.py 补丁 + 幂等
+# Test: base_config.py patch + idempotency
 # ────────────────────────────────────────────────────────────────────
 def test_base_config_idempotent():
-    print("\n── base_config.py 安全参数 + 幂等 ──")
+    print("\n── base_config.py safe parameters + idempotency ──")
     with tempfile.TemporaryDirectory() as tmpdir:
         files = make_fake_mc(tmpdir)
 
-        # 第一次打补丁
+        # first patch
         ah.patch_base_config(files["base_config"], dry=False)
         content_after_1 = open(files["base_config"]).read()
 
-        # 验证关键参数已被写入
+        # verify key params have been written
         for key, (val, _) in ah.SAFE_PARAMS.items():
             in_file = f"{key} = {val}" in content_after_1
-            check(f"第一次补丁后 {key}={val}", in_file,
-                  f"文件内容片段：{content_after_1[:200]}")
+            check(f"after first patch {key}={val}", in_file,
+                  f"file content snippet: {content_after_1[:200]}")
 
-        # 第二次打补丁（幂等：文件内容应一字不变）
+        # second patch (idempotent: file content should be byte-for-byte unchanged)
         ah.patch_base_config(files["base_config"], dry=False)
         content_after_2 = open(files["base_config"]).read()
-        check("二次打补丁幂等（内容零变化）",
+        check("second patch idempotent (content unchanged)",
               content_after_1 == content_after_2,
-              "两次结果不一致")
+              "two results differ")
 
 
 # ────────────────────────────────────────────────────────────────────
-# 测试：core.py 补丁 + 幂等 + MARK 标记 + 语法自检
+# Test: core.py patch + idempotency + MARK marker + syntax self-check
 # ────────────────────────────────────────────────────────────────────
 def test_core_idempotent():
-    print("\n── core.py L2/L4/L5 + 幂等 ──")
+    print("\n── core.py L2/L4/L5 + idempotency ──")
     with tempfile.TemporaryDirectory() as tmpdir:
         files = make_fake_mc(tmpdir)
 
-        # 第一次打补丁
+        # first patch
         ah.patch_core(files["core"], dry=False, platform="xhs")
         content_after_1 = open(files["core"]).read()
 
-        # 验证 MARK 标记注入
-        check("core.py 含 MARK 标记", ah.MARK in content_after_1,
-              "未找到 [xhs-stealth] 标记")
+        # verify MARK marker injection
+        check("core.py contains MARK marker", ah.MARK in content_after_1,
+              "MARK [xhs-stealth] marker not found")
 
-        # 验证 L2 抖动
-        check("core.py L2 jitter 注入",
+        # verify L2 jitter
+        check("core.py L2 jitter injection",
               "L2 jitter" in content_after_1)
 
-        # 验证 L4 预热
-        check("core.py L4 warm-up 注入",
+        # verify L4 warm-up
+        check("core.py L4 warm-up injection",
               "L4: human warm-up" in content_after_1)
 
-        # 验证 Python 语法合法
+        # verify Python syntax is valid
         import ast
         try:
             ast.parse(content_after_1)
             syntax_ok = True
-        except SyntaxError as e:
+        except SyntaxError:
             syntax_ok = False
-        check("core.py 补丁后语法合法", syntax_ok)
+        check("core.py syntax valid after patch", syntax_ok)
 
-        # 第二次打补丁（幂等）
+        # second patch (idempotent)
         ah.patch_core(files["core"], dry=False, platform="xhs")
         content_after_2 = open(files["core"]).read()
-        check("core.py 二次打补丁幂等（内容零变化）",
+        check("core.py second patch idempotent (content unchanged)",
               content_after_1 == content_after_2,
-              "两次结果不一致")
+              "two results differ")
 
 
 # ────────────────────────────────────────────────────────────────────
-# 测试：dry-run 不落盘
+# Test: dry-run writes nothing to disk
 # ────────────────────────────────────────────────────────────────────
 def test_dry_run_no_write():
-    print("\n── dry-run 不落盘 ──")
+    print("\n── dry-run writes nothing to disk ──")
     with tempfile.TemporaryDirectory() as tmpdir:
         files = make_fake_mc(tmpdir)
         original_content = open(files["base_config"]).read()
@@ -167,39 +166,39 @@ def test_dry_run_no_write():
         ah.patch_base_config(files["base_config"], dry=True)
         after_dry = open(files["base_config"]).read()
 
-        check("dry-run 后 base_config 内容不变",
+        check("after dry-run base_config content unchanged",
               original_content == after_dry,
-              "dry-run 意外写入了文件")
+              "dry-run unexpectedly wrote to file")
 
 
 # ────────────────────────────────────────────────────────────────────
-# 测试：backup 机制（首次备份，二次不覆盖）
+# Test: backup mechanism (first backup, second does not overwrite)
 # ────────────────────────────────────────────────────────────────────
 def test_backup_idempotent():
-    print("\n── backup 机制 ──")
+    print("\n── backup mechanism ──")
     with tempfile.TemporaryDirectory() as tmpdir:
         files = make_fake_mc(tmpdir)
         path = files["base_config"]
         bak = path + ah.BAK_SUFFIX
 
-        # 打第一次补丁（会触发 backup）
+        # apply first patch (triggers backup)
         ah.patch_base_config(path, dry=False)
-        check("第一次打补丁后 .bak 存在", os.path.exists(bak))
+        check(".bak exists after first patch", os.path.exists(bak))
 
-        # 记录 .bak 修改时间
+        # record .bak mtime
         mtime1 = os.path.getmtime(bak)
 
-        # 打第二次补丁（幂等，不应触发 backup 覆盖已有 .bak）
+        # apply second patch (idempotent, should not trigger backup overwriting existing .bak)
         ah.patch_base_config(path, dry=False)
         mtime2 = os.path.getmtime(bak)
 
-        check("二次打补丁不覆盖 .bak（保护最原始版本）",
+        check("second patch does not overwrite .bak (protects the original version)",
               mtime1 == mtime2,
               f"mtime1={mtime1} mtime2={mtime2}")
 
 
 # ────────────────────────────────────────────────────────────────────
-# 主入口
+# Main entry
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     test_base_config_idempotent()
@@ -209,7 +208,7 @@ if __name__ == "__main__":
 
     print(f"\n{'='*40}")
     total = _pass + _fail
-    print(f"结果：{_pass}/{total} PASS，{_fail} FAIL")
+    print(f"Result: {_pass}/{total} PASS, {_fail} FAIL")
     if _fail:
         print("FAIL")
         sys.exit(1)

@@ -3,11 +3,11 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# 本工具产生的备份与日志
+# Backups and logs produced by this tool
 *.xhs-stealth.bak
 *.log
 
-# 系统/编辑器
+# OS / editors
 .DS_Store
 .idea/
 .vscode/
