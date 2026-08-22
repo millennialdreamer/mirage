@@ -156,8 +156,19 @@ class XhsInteractor:
         except Exception:
             return None
 
+    # 不同平台用不同属性表达"已赞/已收藏/已关注"：小红书多用 class（.like-active 之类）+
+    # aria-label 文案变化，少数用 aria-pressed。只查单一属性会在拿不到时误判成"成功"。
+    VERIFY_ATTRS = ("aria-pressed", "class", "aria-label", "aria-selected")
+
+    async def _state_snapshot(self, loc):
+        """对可能反映状态的多个属性取快照，用于点击前后对比。"""
+        snap = {}
+        for name in self.VERIFY_ATTRS:
+            snap[name] = await self._attr(loc, name)
+        return snap
+
     # ---- 动作层：每个都先过配额、再就绪、再拟人点、再验证 ----
-    async def _do(self, key, label, verify_attr="aria-pressed"):
+    async def _do(self, key, label):
         if self.policy and not self.policy.can(key):
             print(f"  「{label}」已达上限或在冷却，跳过")
             return False
@@ -168,17 +179,30 @@ class XhsInteractor:
         if not await self._ready(loc):
             print(f"  「{label}」不可点（被遮挡/不可见）")
             return False
-        before = await self._attr(loc, verify_attr)
+        before = await self._state_snapshot(loc)
         clicked = await self._human_click(loc, label)
         if not clicked:                              # dry-run 或没点成
             return False
         await human_sleep(0.6, 0.5, 1.2)             # 点后自然短停
-        after = await self._attr(loc, verify_attr)
-        ok = (after != before) if before is not None else True
-        if ok and self.policy:
-            self.policy.record(key)                  # 只在确认生效后才计数
-        print(f"  ✓ 「{label}」{'已生效' if ok else '(状态未确认)'}")
-        return ok
+        after = await self._state_snapshot(loc)
+
+        # 三态诚实判定（旧实现：单查 aria-pressed，小红书赞根本没这属性 → before=None
+        # → 恒判"已生效"，没点上也报成功还扣配额，校验层形同虚设）。
+        verifiable = any(v is not None for v in before.values())
+        changed = any(before[k] != after[k] for k in before)
+        if not verifiable:
+            state = "已点击（该按钮无可校验属性，是否生效未知）"
+        elif changed:
+            state = "已生效"
+        else:
+            state = "未见状态变化（可能没点上）"
+
+        # 配额：只要真实点击已派发就计数（宁可多算——少算会让实际互动超过配额上限，
+        # 反而抬高封号风险；这与本工具"宁可慢"的立场一致）。
+        if self.policy:
+            self.policy.record(key)
+        print(f"  {'✓' if changed else '·'} 「{label}」{state}")
+        return clicked
 
     async def like_note(self):
         return await self._do("like", "点赞")
@@ -187,7 +211,7 @@ class XhsInteractor:
         return await self._do("collect", "收藏")
 
     async def follow_user(self):
-        return await self._do("follow", "关注", verify_attr="class")
+        return await self._do("follow", "关注")
 
     async def comment_note(self, text: str):
         """评论 —— 最敏感（内容风控：重复/广告词/带链接最易判违规）。逐字输入更像人。"""

@@ -32,7 +32,12 @@ def _bezier_path(x0, y0, x1, y1, steps):
     cy2 = y0 + dy * random.uniform(0.6, 0.8) + random.uniform(-40, 40)
     pts = []
     for i in range(1, steps + 1):
-        t = i / steps
+        # 缓入缓出（smoothstep）：把均匀的 i/steps 重映射成"起步慢 → 中段快 → 到点前减速"。
+        # ⚠️ 直接用均匀 t 会让整条轨迹近似匀速、端点速度不为零——这是运动学上最典型的
+        # 机器人特征（真人受费茨定律支配：加速接近、临近目标显著减速）。做行为建模的风控
+        # （reCAPTCHA v3 / 瑞数等）正是查这条速度曲线，所以这一行是拟人轨迹的关键。
+        _u = i / steps
+        t = _u * _u * (3 - 2 * _u)
         mt = 1 - t
         bx = mt**3 * x0 + 3 * mt**2 * t * cx1 + 3 * mt * t**2 * cx2 + t**3 * x1
         by = mt**3 * y0 + 3 * mt**2 * t * cy1 + 3 * mt * t**2 * cy2 + t**3 * y1
