@@ -20,12 +20,28 @@ metadata:
 | `apply_hardening.py` | ⭐一键给 MediaCrawler 打入五层加固（幂等 / 自动备份 / 可回滚） |
 | `safe_profile.py` | 安全档 / 常规档 / 激进档 一键切换 |
 | `verify_stealth.py` | 指纹自检：确认 stealth 真的隐藏了 webdriver 等特征 |
-| `fingerprint_benchmark.py` | 指纹 benchmark：加固前后 BotScore 量化对比 + 证据报告（升级版自检，真跑让用户手动） |
+| `fingerprint_benchmark.py` | 指纹验证三档：`--botd`(第三方 BotD 判定) / `--detect-url`(真检测页通过率+截图) / 本地 7 信号相对分（**⚠️ 本地分是自打的，不是证据**）。真跑让用户手动 |
 | `human_behavior.py` | 人类行为模拟（贝塞尔鼠标 / 拟人节奏，被互动引擎复用） |
 | `weekly_maintenance.sh` | 每周更新 stealth.min.js + 检查上游补丁 |
 | `human_interaction.py` | ⭐互动引擎：识别 + 拟人点击 点赞/关注/收藏/评论（**dry-run 默认**） |
 | `interaction_policy.py` | 互动配额：保守每日上限 + 最小间隔 + 跨 session 计数持久化 |
-| `mirage_loop.py` | ⭐终极版"拟人刷号"主循环：大量浏览 + 少量克制互动 + 风控熔断 |
+| `mirage_loop.py` | ⭐主循环：大量浏览 + 少量克制互动 + 风控熔断 + 软封杀预警自动降速 + 可选验证码回调 |
+| `soft_ban_radar.py` | ⭐**软封杀早期预警**：验证码率↑/返回缩水/延迟漂移/蜜罐命中/成功率下滑 五信号看趋势，在**被封之前**判断"正在被降权" |
+| `device_profile.py` | ⭐**统一设备画像**：所有指纹值从同一张画像派生（一致性 > 单值伪装）+ 出厂矛盾校验 + 种子化确定性 canvas/audio 噪声 |
+| `network_resilience.py` | 网络容错工具：代理池 / 重试 / 熔断（独立模块，非默认集成） |
+| `cli.py` | 统一命令行入口（`mirage` 命令），见下方「CLI 速查」 |
+
+## CLI 速查（装好后可直接用 `mirage`，未装则 `python scripts/cli.py`）
+
+| 命令 | 作用 |
+|------|------|
+| `mirage apply <路径> [-p 平台] [--dry-run/--check/--revert]` | 打 / 查 / 撤 五层加固 |
+| `mirage canary <路径>` | 离线失效体检（加固是否还在 / 锚点失配 / 资源健康） |
+| `mirage radar [--account X] [--reset]` | ⭐软封杀预警：看是否正在被降权 |
+| `mirage profile <种子> [--emit 文件]` | ⭐设备画像：自洽指纹 + 矛盾校验 + 导出注入 JS |
+| `mirage guard-install / guard-uninstall <路径>` | 装/卸 git hook：pull 后提示加固是否被覆盖 |
+| `mirage doctor` | 环境自检（Python / 驱动 / 探测 MediaCrawler） |
+| `mirage verify` / `mirage benchmark` | 指纹自检 / benchmark（会开浏览器，**提示用户手动跑**） |
 
 ## 五层防护（这是"不会被检测"的全部底气）
 

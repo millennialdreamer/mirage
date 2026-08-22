@@ -31,7 +31,35 @@ REAL_SIGNATURES = [
     "    async def search(self):",            # ks / bili / wb
 ]
 
-REAL_MC = "<path-to-your-MediaCrawler>"
+def _find_real_mediacrawler() -> str:
+    """定位一份真实 MediaCrawler 用于回归（没有就跳过真实环境层，不影响 CI）。
+
+    优先级：环境变量 MIRAGE_TEST_MEDIACRAWLER > 常见安装位置自动探测。
+    （不写死任何个人路径——那既泄漏本机目录结构，对其他贡献者也无用。）
+    """
+    env = os.environ.get("MIRAGE_TEST_MEDIACRAWLER", "").strip()
+    if env and os.path.isdir(env):
+        return env
+    home = os.path.expanduser("~")
+    for base in (os.path.join(home, "Documents"), home, os.path.join(home, "projects")):
+        if not os.path.isdir(base):
+            continue
+        try:
+            for entry in os.listdir(base):
+                cand = os.path.join(base, entry)
+                if entry == "MediaCrawler" and os.path.isfile(
+                        os.path.join(cand, "config", "base_config.py")):
+                    return cand
+                nested = os.path.join(cand, "MediaCrawler")   # 再下探一层
+                if os.path.isdir(cand) and os.path.isfile(
+                        os.path.join(nested, "config", "base_config.py")):
+                    return nested
+        except OSError:
+            continue
+    return ""
+
+
+REAL_MC = _find_real_mediacrawler()
 PLATS = {"xhs": "xhs", "dy": "douyin", "ks": "kuaishou", "bili": "bilibili",
          "wb": "weibo", "tieba": "tieba", "zhihu": "zhihu"}
 
