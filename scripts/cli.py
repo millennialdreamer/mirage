@@ -109,7 +109,7 @@ def _radar(account, do_reset):
         print(f"✓ Cleared baseline for account \"{account}\" (old baseline no longer applies after changing account/IP)")
         return 0
     v = radar.assess()
-    icon = {"正常": "✓", "观察": "·", "警戒": "⚠", "危险": "🛑", "数据不足": "?"}.get(v.level, "·")
+    icon = {"normal": "✓", "watch": "·", "warning": "⚠", "danger": "🛑", "insufficient data": "?"}.get(v.level, "·")
     print(f"\n{icon} Soft-ban radar · account \"{account}\"")
     print(f"  Level: {v.level}   Risk score: {v.score}/100   Samples: {v.samples}")
     if v.signals:

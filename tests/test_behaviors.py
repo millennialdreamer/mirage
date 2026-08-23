@@ -65,14 +65,14 @@ def test_radar_refuses_to_guess_on_small_sample():
     r = _radar("few")
     for _ in range(5):
         r.observe(ok=True, latency=1.0, completeness=1.0)
-    assert r.assess().level == "数据不足", "On insufficient samples the radar must say insufficient data, never guess"
+    assert r.assess().level == "insufficient data", "On insufficient samples the radar must say insufficient data, never guess"
 
 
 def test_radar_no_false_alarm_on_healthy_stream():
     r = _radar("ok")
     for _ in range(40):
         r.observe(ok=True, latency=1.0, completeness=1.0)
-    assert r.assess().level == "正常", "Healthy stream must not raise false alarms"
+    assert r.assess().level == "normal", "Healthy stream must not raise false alarms"
 
 
 def test_radar_detects_degradation():
@@ -82,7 +82,7 @@ def test_radar_detects_degradation():
     for i in range(20):
         r.observe(ok=(i % 3 != 0), latency=2.8, completeness=0.7, captcha=(i % 5 == 0))
     v = r.assess()
-    assert v.level in ("警戒", "危险") and v.should_slow_down()
+    assert v.level in ("warning", "danger") and v.should_slow_down()
 
 
 def test_radar_detects_silent_shrink_alone():
@@ -92,7 +92,7 @@ def test_radar_detects_silent_shrink_alone():
         r.observe(ok=True, latency=1.0, completeness=1.0)
     for _ in range(20):
         r.observe(ok=True, latency=1.0, completeness=0.68)
-    assert r.assess().level != "正常", "Silent shrink is the most typical soft-ban symptom, must not miss it"
+    assert r.assess().level != "normal", "Silent shrink is the most typical soft-ban symptom, must not miss it"
 
 
 def test_radar_honeypot_is_conclusive_not_diluted():
@@ -102,7 +102,7 @@ def test_radar_honeypot_is_conclusive_not_diluted():
         r.observe(ok=True, latency=1.0, completeness=1.0)
     r.observe(ok=True, latency=1.0, completeness=1.0, honeypot=True)
     v = r.assess()
-    assert v.level in ("警戒", "危险"), "Honeypot is conclusive evidence, must be >= warning"
+    assert v.level in ("warning", "danger"), "Honeypot is conclusive evidence, must be >= warning"
 
 
 def test_radar_accounts_are_isolated():
