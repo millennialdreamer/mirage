@@ -255,14 +255,15 @@ class SoftBanRadar:
         if hp:
             advice = f"⚠ Honeypot hit {hp} time(s) — hidden elements are only ever touched by automation. This is conclusive." + advice
         if not can_compare:
-            advice += f"（注：基线仅 {len(baseline)} 次，完整度/延迟/成功率的趋势对比暂未启用）"
+            advice += (f" (Note: baseline has only {len(baseline)} observation(s), so the "
+                       f"completeness / latency / success-rate trend comparison is not active yet.)")
 
         return Verdict(level=level, score=score, advice=advice, signals=sig, samples=n)
 
     def summary(self) -> str:
         v = self.assess()
         parts = " | ".join(f"{k}={val}" for k, val in v.signals.items())
-        return f"[软封杀雷达] {v.level}({v.score}/100) 样本{v.samples}  {parts}"
+        return f"[soft-ban radar] {v.level}({v.score}/100) samples={v.samples}  {parts}"
 
     def reset(self) -> None:
         """Call after switching account/IP: old baseline no longer applies, clear and rebuild."""

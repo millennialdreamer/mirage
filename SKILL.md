@@ -3,7 +3,7 @@ name: mirage
 description: |
   Anti-detection hardening for automation against Xiaohongshu / Douyin / Kuaishou / Bilibili / Weibo / Tieba / Zhihu. Two capabilities: (1) one-command five-layer behavior hardening for the MediaCrawler scraper (`-p all` covers all 7 platforms); (2) a human-like interaction engine for safe like / follow / collect / comment, plus a soft-ban early-warning radar that detects silent throttling before a ban lands.
   Use when: hardening MediaCrawler, health-checking or reverting hardening, verifying stealth, diagnosing warnings/rate-limits; or doing restrained human-like interaction, account warm-up, and checking whether an account is being shadow-banned.
-  Keywords: anti-detection, anti-bot, stealth, MediaCrawler hardening, scraper detection, shadow ban, rate limited, account banned, browser fingerprint, human-like interaction, safe like/follow, 小红书爬虫, 反检测, 防风控, 被警告, 被限流, 被封号, 加固, 拟人互动, 养号, 软封杀.
+  Keywords: anti-detection, anti-bot, stealth, MediaCrawler hardening, scraper detection, shadow ban, rate limited, account banned, browser fingerprint, human-like interaction, safe like/follow, 小红书爬虫, 反检测, 防风控, 被警告, 被限流, 被封号, 加固, 拟人互动, 养号, 软封杀. (Chinese keywords are intentional — the target platforms are Chinese-language, so users describe the problem in Chinese.)
 metadata:
   trigger: harden a scraper / getting detected / rate-limited / shadow-banned
   source: millennialdreamer/mirage

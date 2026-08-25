@@ -31,9 +31,9 @@ The tool has three built-in tiers, switchable with a single command. **Always us
 Switch tier commands (under the MediaCrawler directory):
 
 ```bash
-python config/safe_profile.py            # 看当前档 + 预估速率
-python config/safe_profile.py safe       # 切到安全档
-python config/safe_profile.py normal     # 切到常规档
+python config/safe_profile.py            # show current tier + estimated rate
+python config/safe_profile.py safe       # switch to the safe tier
+python config/safe_profile.py normal     # switch to the normal tier
 ```
 
 > Note: don't run multiple crawler windows at the same time — the rates add up, which is equivalent to secretly switching to fast.

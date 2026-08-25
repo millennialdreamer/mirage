@@ -146,6 +146,9 @@ _RETRYABLE_PATTERNS = [
 ]
 _NOT_RETRYABLE_PATTERNS = [
     "400", "401", "403", "404", "content blocked", "business error",
+    # Chinese literals are intentional: these are the exact strings the target
+    # platforms return ("captcha" / "account anomaly"). Translating them would
+    # silently stop the matcher from ever firing.
     "login required", "验证码", "账号异常",
 ]
 

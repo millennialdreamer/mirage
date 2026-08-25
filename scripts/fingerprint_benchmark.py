@@ -117,7 +117,7 @@ def render_report(fp_plain, fp_stealth):
     bs_s, hits_s = score_fingerprint(fp_stealth)
 
     def block(title, fp, bs, hits):
-        print(f"\n  【{title}】 BotScore = {bs}/100")
+        print(f"\n  [{title}]  BotScore = {bs}/100")
         print(f"    webdriver={fp.get('webdriver')}  plugins={fp.get('plugins')}  "
               f"chrome={fp.get('hasChrome')}  webglRenderer={fp.get('webglRenderer')}")
         for _, w, why in hits:
@@ -131,7 +131,7 @@ def render_report(fp_plain, fp_stealth):
     drop = bs_p - bs_s
     print("\n═══ Conclusion (7-signal relative baseline, not real evidence) ═══")
     print(f"  BotScore: {bs_p} → {bs_s}  (dropped {drop} points, lower = more human-like)")
-    print(f"  Risk level: Control【{risk_level(bs_p)}】→ Experiment【{risk_level(bs_s)}】")
+    print(f"  Risk level: Control [{risk_level(bs_p)}] → Experiment [{risk_level(bs_s)}]")
     if drop >= 40:
         print("  ✓ Hardening significantly effective: most bot features erased")
     elif drop > 0:

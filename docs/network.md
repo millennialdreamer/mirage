@@ -96,7 +96,7 @@ try:
     async with cb:
         await some_network_call()
 except CircuitBreakerOpen:
-    print("熔断，停止 session")
+    print("Circuit breaker tripped — stopping the session")
 ```
 
 To verify logic without connecting to the network:

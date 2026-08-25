@@ -56,6 +56,12 @@ except ImportError:
 # Risk-control signals: use **full phrases** (almost never appear in note body text), check dialogs first, massively reduce false positives.
 # Counter-example: the standalone word "captcha" may appear in note body text → would falsely trigger circuit breaker, so don't use single
 # words.
+#
+# ⚠️ DO NOT TRANSLATE the phrases below. They are the exact wording these Chinese-language
+# platforms render in their risk-control dialogs ("acting too frequently", "complete the
+# security check", "drag the slider", "your account has been ...", "please log in again").
+# Translating them disables the circuit breaker completely — it would never match again,
+# and the loop would keep interacting straight into a ban.
 DANGER_PHRASES = ["操作过于频繁", "操作太频繁", "频繁操作请", "完成安全验证",
                   "账号存在异常", "账号出现异常", "系统检测到异常", "请完成验证",
                   "拖动滑块", "滑动验证", "你的账号已被", "账号已被封", "请重新登录"]
@@ -159,7 +165,7 @@ class MirageLoop:
             return False
         # Open the detail page, dwell to read (long tail: mostly 2.5~6s, occasionally much longer 8~20s)
         try:
-            await self.actor._human_click(card, "笔记卡片")
+            await self.actor._human_click(card, "note card")
             dwell = random.uniform(2.5, 6.0) if random.random() > 0.2 else random.uniform(8.0, 20.0)
             await asyncio.sleep(dwell)
         except Exception:

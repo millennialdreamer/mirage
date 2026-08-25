@@ -26,9 +26,9 @@ The signature API's httpx requests are an implementation detail of **MediaCrawle
 If the target platform's risk control is strict enough to also check JA3 at the signature API layer, you can replace the `httpx` / `requests` that sends signing requests in MediaCrawler with [`curl_cffi`](https://github.com/yifeikong/curl_cffi) (Python bindings for curl-impersonate that can impersonate the ClientHello of a specified Chrome version):
 
 ```python
-# 原：import httpx;  httpx.get(url, headers=..., cookies=...)
+# before: import httpx;  httpx.get(url, headers=..., cookies=...)
 from curl_cffi import requests
-resp = requests.get(url, headers=..., cookies=..., impersonate="chrome")  # JA3 伪装成 Chrome
+resp = requests.get(url, headers=..., cookies=..., impersonate="chrome")  # JA3 now impersonates Chrome
 ```
 
 ⚠️ This changes **MediaCrawler's request layer**, not Mirage's hardening scope. Before changing, read the upstream signing code carefully and be prepared for "upstream upgrades will conflict". Mirage does not do this step for you, nor does it guarantee upstream compatibility.

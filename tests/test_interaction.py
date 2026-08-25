@@ -219,7 +219,7 @@ def test_human_interaction_dry_run():
         page = MockPage()
         interactor = XhsInteractor(page, dry_run=True)
         loc = MockLocator()
-        clicked = await interactor._human_click(loc, "点赞")
+        clicked = await interactor._human_click(loc, "like")
         return page.mouse, clicked
 
     mouse_dry, clicked_dry = asyncio.run(_test_dry())
@@ -241,7 +241,7 @@ def test_human_interaction_dry_run():
         page = MockPage()
         interactor = XhsInteractor(page, dry_run=False)
         loc = MockLocator()
-        clicked = await interactor._human_click(loc, "点赞")
+        clicked = await interactor._human_click(loc, "like")
         return page.mouse, clicked
 
     mouse_real, clicked_real = asyncio.run(_test_real())

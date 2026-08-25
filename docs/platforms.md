@@ -17,11 +17,11 @@ Mirage's five-layer hardening (behavior layer) is universal across the **7 platf
 ## One-Click Hardening
 
 ```bash
-python apply_hardening.py <MediaCrawler根> -p all --dry-run    # 先看 7 平台会改什么
-python apply_hardening.py <MediaCrawler根> -p all              # 7 平台一起加固
-python apply_hardening.py <MediaCrawler根> -p dy               # 只加固抖音
-python apply_hardening.py <MediaCrawler根> -p all --check      # 全平台体检
-python apply_hardening.py <MediaCrawler根> -p bili --revert    # 还原某平台
+python apply_hardening.py <MediaCrawler-root> -p all --dry-run  # preview what changes on all 7 platforms
+python apply_hardening.py <MediaCrawler-root> -p all            # harden all 7 platforms at once
+python apply_hardening.py <MediaCrawler-root> -p dy             # harden Douyin only
+python apply_hardening.py <MediaCrawler-root> -p all --check    # health check across all platforms
+python apply_hardening.py <MediaCrawler-root> -p bili --revert  # revert one platform
 ```
 
 > `cdp_browser.py` (L1) and `base_config.py` (L3) are shared across all platforms. When `-p all` is used, the first platform changes them and the rest are skipped idempotently; `core.py` (L2/L4/L5) is hardened independently per platform.

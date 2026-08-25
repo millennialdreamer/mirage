@@ -32,6 +32,11 @@ except ImportError:
 # Order = attempt order: stable semantic attribute → role/text → class fallback.
 # ⚠️ xhs has been verified on actual pages; dy / bili are semantic reasonable guesses, **need to be checked and adjusted against
 # actual pages**.
+#
+# ⚠️ DO NOT TRANSLATE the Chinese strings below. They are not prose — they are the
+# literal aria-label / button text rendered by these Chinese-language sites. Replacing
+# 赞 / 收藏 / 关注 / 评论 with English would make every selector silently match nothing,
+# and the interactor would just report "button not found" forever.
 SELECTORS = {
     # -----------------------------------------------------------------------
     # Xiaohongshu (xhs) —— verified on actual pages
