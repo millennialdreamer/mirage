@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor and ceiling of the supported range, plus one in between.
+        # The floor must match requires-python in pyproject.toml.
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest ruff mypy
+
+      - name: Tests
+        # Includes the i18n guards: a few string literals in this codebase are data, not
+        # prose (risk-control phrases, CJK selectors, patch markers). Translating or
+        # renaming them breaks the tool silently, so it is enforced here rather than
+        # left to a code comment.
+        run: python -m pytest tests -q
+
+      - name: Benchmark scoring self-check
+        # Validates the scoring logic only — no browser, no network. Real fingerprint
+        # verification needs a real browser and is run manually by the user.
+        run: python scripts/fingerprint_benchmark.py --self-test
+
+      - name: CLI smoke
+        run: |
+          python scripts/cli.py doctor
+          python scripts/cli.py profile ci-seed
+          python scripts/cli.py radar --account ci --reset
+
+  lint:
+    name: lint + types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Lint on the floor version so py39-incompatible syntax fails here.
+          python-version: "3.9"
+
+      - name: Install dev tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: ruff
+        run: ruff check scripts tests
+
+      - name: mypy
+        run: mypy scripts --ignore-missing-imports
+
+  end-to-end:
+    name: end-to-end on a fixture install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build a fixture MediaCrawler tree
+        # apply_hardening rewrites third-party source with regex anchors. Unit tests cover
+        # the anchors; this covers the full lifecycle against a tree on disk, including
+        # idempotency and that --revert actually restores the originals byte for byte.
+        run: |
+          set -eux
+          mkdir -p /tmp/mc/{config,media_platform/xhs,tools,libs}
+          cat > /tmp/mc/config/base_config.py <<'EOF'
+          CRAWLER_MAX_SLEEP_SEC = 1
+          CRAWLER_MAX_NOTES_COUNT = 20
+          MAX_CONCURRENCY_NUM = 3
+          ENABLE_CDP_MODE = False
+          CDP_CONNECT_EXISTING = False
+          HEADLESS = True
+          SAVE_LOGIN_STATE = False
+          EOF
+          cat > /tmp/mc/media_platform/xhs/core.py <<'EOF'
+          import asyncio
+
+
+          class Crawler:
+              async def search(self) -> None:
+                  """search"""
+                  await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
+                  await asyncio.sleep(crawl_interval)
+
+              async def other(self):
+                  pass
+          EOF
+          cat > /tmp/mc/tools/cdp_browser.py <<'EOF'
+          class CDPBrowserManager:
+              async def launch(self):
+                  browser_context = object()
+                  return browser_context
+          EOF
+          # Only needs to be non-trivial and contain "webdriver" — the health check tests
+          # both. Sized so the log reads in KB rather than a confusing "0KB".
+          printf '// webdriver\n%4000s\n' '' > /tmp/mc/libs/stealth.min.js
+          cp -r /tmp/mc /tmp/mc-pristine
+
+      - name: dry-run writes nothing
+        run: |
+          set -eux
+          python scripts/apply_hardening.py /tmp/mc --dry-run
+          diff -r /tmp/mc /tmp/mc-pristine
+
+      - name: apply, then verify all layers land
+        run: |
+          set -eux
+          python scripts/apply_hardening.py /tmp/mc
+          python scripts/apply_hardening.py /tmp/mc --check
+          python scripts/apply_hardening.py /tmp/mc --canary
+          python -c "import ast,sys; ast.parse(open('/tmp/mc/media_platform/xhs/core.py').read())"
+
+      - name: re-apply is idempotent
+        run: |
+          set -eux
+          cp /tmp/mc/media_platform/xhs/core.py /tmp/before.py
+          python scripts/apply_hardening.py /tmp/mc
+          diff /tmp/before.py /tmp/mc/media_platform/xhs/core.py
+
+      - name: revert restores the originals exactly
+        run: |
+          set -eux
+          python scripts/apply_hardening.py /tmp/mc --revert
+          diff /tmp/mc/media_platform/xhs/core.py /tmp/mc-pristine/media_platform/xhs/core.py
+          diff /tmp/mc/config/base_config.py /tmp/mc-pristine/config/base_config.py
+          diff /tmp/mc/tools/cdp_browser.py /tmp/mc-pristine/tools/cdp_browser.py
+
+      - name: canary reports damage with a non-zero exit
+        # canary's exit code is what the guard git-hook keys off, so a silent
+        # zero here would make the whole early-warning path useless.
+        run: |
+          set -eux
+          python scripts/apply_hardening.py /tmp/mc
+          sed -i 's/^MAX_CONCURRENCY_NUM = 1/MAX_CONCURRENCY_NUM = 8/' /tmp/mc/config/base_config.py
+          if python scripts/apply_hardening.py /tmp/mc --canary; then
+            echo "canary returned 0 on a damaged install"; exit 1
+          fi

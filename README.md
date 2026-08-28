@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/millennialdreamer/mirage/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/millennialdreamer/mirage/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue">
   <img alt="Dependencies" src="https://img.shields.io/badge/core%20deps-zero-brightgreen">
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-7-orange">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-24%20passing-success">
   <img alt="License" src="https://img.shields.io/badge/license-research--only-lightgrey">
 </p>
 

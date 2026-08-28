@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Local CI — one-shot pytest + benchmark self-check + ruff + mypy.
-# Replaces GitHub Actions (Actions disabled by quota in this environment); ruff/mypy missing will skip gracefully and prompt install.
+# Mirrors .github/workflows/ci.yml so you can catch failures before pushing; unlike CI it
+# skips gracefully (and tells you what to install) when ruff/mypy are missing, because a
+# missing local tool should not block you the way it should block a merge.
 # Usage:  bash scripts/ci.sh
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

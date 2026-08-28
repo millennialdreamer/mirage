@@ -2,6 +2,32 @@
 
 > Version convention: pre-release uses `0.x.y` (semver) — each x increment = a set of mature capabilities / milestone, y = patches.
 
+## Unreleased
+
+**Added**
+- GitHub Actions CI (`.github/workflows/ci.yml`): tests on Python 3.9/3.11/3.13, lint/types pinned to
+  the floor version, and an end-to-end job that runs the real patch lifecycle against a fixture
+  MediaCrawler tree — `--dry-run` writes nothing, apply lands all five layers, re-apply is byte-identical,
+  `--revert` restores the originals exactly, and `--canary` exits **non-zero** on a damaged install
+  (that exit code is what the guard git-hook keys off, so a silent zero would break the whole path).
+- `tests/test_i18n_guards.py`: the "these Chinese strings are data, not prose" rule is now enforced
+  rather than merely commented. Covers `DANGER_PHRASES`, per-platform-per-element `SELECTORS`,
+  `_NOT_RETRYABLE_PATTERNS`, the `[xhs-stealth]` marker / `.xhs-stealth.bak` suffix, the injected L5
+  symbol, and radar level strings against the code that compares them. Each guard was verified by
+  deliberately breaking the thing it protects and confirming it goes red.
+
+**Removed**
+- `README.en.md` — a stale duplicate left over from the pre-English-conversion layout. It described
+  L2 as uniform jitter (`base × U(0.7,1.6)`) long after the implementation moved to a right-skewed
+  log-normal, claimed Python 3.11+ against a `requires-python = ">=3.9"`, promised "no warnings, no
+  throttling, no bans", and never mentioned the radar. Nothing linked to it; `README.md` is the
+  single English entry point.
+
+**Fixed**
+- README's `tests-24 passing` badge was static, self-awarded, and out of date. Replaced with the live
+  CI badge.
+- `scripts/ci.sh` header no longer claims GitHub Actions is unavailable — it is, and CI now mirrors it.
+
 ## v0.6 — Observability & Consistency (deep completion after multi-party review + red-team source read)
 
 **Added**

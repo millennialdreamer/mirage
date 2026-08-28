@@ -20,10 +20,18 @@ is not responsible for misuse.
    keep the atomic-write → AST-validate → rollback path intact, and preserve the `[xhs-stealth]` marker
    and `.xhs-stealth.bak` suffix — deployed installs depend on those for `--check` / `--revert`.
    Run `--dry-run` twice before submitting.
-5. **Run the suite.** `bash scripts/ci.sh` must be green (pytest + ruff + mypy). Behavioral changes need
-   a regression test in `tests/test_behaviors.py`; every assertion in there maps to a real bug that was
-   found and fixed.
-6. **Check `docs/` before opening an issue.** Platform differences and install problems are documented.
+5. **Some Chinese literals are data — do not translate them.** The source and docs are English, but a
+   handful of strings are the exact bytes the target platforms emit: the risk-control phrases in
+   `DANGER_PHRASES`, the CJK `aria-label` / button text in `SELECTORS`, the error strings in
+   `_NOT_RETRYABLE_PATTERNS`. They look like an unfinished translation; they are not. Translating them
+   fails *silently* — the circuit breaker stops matching, selectors match nothing, hard failures get
+   retried — which is why `tests/test_i18n_guards.py` enforces it instead of a code comment. If you add
+   a genuinely new literal, raise its budget in that test and say why.
+6. **Run the suite.** `bash scripts/ci.sh` must be green (pytest + ruff + mypy); CI runs the same checks
+   on Python 3.9/3.11/3.13 plus a full apply → check → revert lifecycle against a fixture install.
+   Behavioral changes need a regression test in `tests/test_behaviors.py`; every assertion in there maps
+   to a real bug that was found and fixed.
+7. **Check `docs/` before opening an issue.** Platform differences and install problems are documented.
 
 ## Development
 
