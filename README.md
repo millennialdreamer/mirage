@@ -17,6 +17,10 @@
   <img alt="License" src="https://img.shields.io/badge/license-research--only-lightgrey">
 </p>
 
+<p align="center">
+  🇨🇳 中文文档：<a href="./README_zh.md">README_zh.md</a>
+</p>
+
 ---
 
 Most anti-detect tooling helps you **look** human. None of it tells you **when that stopped working**.
